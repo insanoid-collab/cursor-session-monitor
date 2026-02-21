@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterFileEdit": [
+      {
+        "command": "curl -sS -X POST http://100.125.85.40:9876/hooks/cursor/afterFileEdit -H 'Content-Type: application/json' -d @-"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "curl -sS -X POST http://100.125.85.40:9876/hooks/cursor/beforeShellExecution -H 'Content-Type: application/json' -d @-"
+      }
+    ],
+    "stop": [
+      {
+        "command": "curl -sS -X POST http://100.125.85.40:9876/hooks/cursor/stop -H 'Content-Type: application/json' -d @-"
+      }
+    ]
+  }
+}

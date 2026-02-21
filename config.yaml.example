@@ -1,0 +1,38 @@
+service:
+  host: "0.0.0.0"
+  port: 9876
+  log_level: "info"
+
+database:
+  path: "./data/sessions.db"
+
+telegram:
+  enabled: true
+  mode: "openclaw" # openclaw | bot_api
+  channel: "telegram"
+  account: "codex"
+  target: "telegram:155595447"
+  # bot_token: "${TELEGRAM_BOT_TOKEN}"
+  # chat_id: "155595447"
+
+  notify_on:
+    session_start: true
+    session_end: true
+    file_edit: true
+    shell_command: true
+    attention_needed: true
+
+  thresholds:
+    file_edit_batch_interval_seconds: 60
+    file_edit_min_events: 2
+    shell_batch_interval_seconds: 30
+    shell_min_events: 1
+
+  dangerous_commands:
+    - "rm -rf"
+    - "sudo"
+    - "curl .*\\|\\s*sh"
+
+agents:
+  cursor:
+    session_timeout_minutes: 120
