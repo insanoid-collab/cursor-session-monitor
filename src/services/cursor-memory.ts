@@ -68,6 +68,7 @@ function createBubble(type: 1 | 2, text: string): MinimalBubble {
 export interface QuestionAnswer {
   questionId: string;
   selectedOptionId: string;
+  freeformText?: string;
 }
 
 /**
@@ -109,7 +110,7 @@ export function submitQuestionAnswer(
     const freeformTexts: Record<string, string> = {};
     for (const a of answers) {
       currentSelections[a.questionId] = [a.selectedOptionId];
-      freeformTexts[a.questionId] = '';
+      freeformTexts[a.questionId] = a.freeformText ?? '';
     }
 
     // Update additionalData

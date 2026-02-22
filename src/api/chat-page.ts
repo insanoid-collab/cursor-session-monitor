@@ -147,11 +147,22 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .question-item:last-child { margin-bottom: 0; }
 .question-prompt { font-size: 13px; color: var(--text-bright); font-weight: 500; margin-bottom: 6px; }
 .question-options { display: flex; flex-direction: column; gap: 4px; }
-.question-option { display: flex; align-items: flex-start; gap: 8px; padding: 5px 10px; border-radius: var(--radius-xs); background: var(--bg); font-size: 12px; color: var(--text); transition: background var(--transition); }
+.question-option { display: flex; align-items: flex-start; gap: 8px; padding: 5px 10px; border-radius: var(--radius-xs); background: var(--bg); font-size: 12px; color: var(--text); transition: all var(--transition); border: 1px solid transparent; }
+.question-card:not(.answered) .question-option { cursor: pointer; }
 .question-option:hover { background: var(--surface-hover); }
-.question-option.selected { background: var(--green-dim); border: 1px solid var(--green); }
+.question-option.selected { background: var(--green-dim); border-color: var(--green); }
+.question-option.active { background: rgba(108,99,255,0.15); border-color: var(--accent); }
 .option-letter { font-weight: 600; color: var(--accent); min-width: 16px; flex-shrink: 0; }
 .question-option.selected .option-letter { color: var(--green); }
+.question-option.active .option-letter { color: var(--accent); }
+.question-freeform { width: 100%; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-xs); color: var(--text-bright); padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none; margin-top: 4px; transition: border-color var(--transition); box-sizing: border-box; }
+.question-freeform:focus { border-color: var(--accent); }
+.question-freeform::placeholder { color: var(--text-dim); }
+.question-submit-row { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 10px; }
+.question-submit-btn { background: var(--accent); color: #fff; border: none; border-radius: var(--radius-xs); padding: 7px 20px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all var(--transition); }
+.question-submit-btn:hover { filter: brightness(1.15); }
+.question-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.question-error { color: var(--orange); font-size: 11px; }
 .question-card .msg-time { margin-top: 8px; }
 
 /* Code & markdown */
@@ -568,27 +579,116 @@ function buildQuestionHtml(m) {
   }
 
   var cls = 'question-card' + (isAnswered ? ' answered' : '');
-  var html = '<div class="' + cls + '">';
+  var html = '<div class="' + cls + '" data-bubble-id="' + esc(m.bubbleId) + '">';
   html += '<div class="question-card-header">' + (isAnswered ? '&#10003; Answered' : '&#9679; Questions') + '</div>';
 
   aq.questions.forEach(function(q, qi) {
-    html += '<div class="question-item">';
+    html += '<div class="question-item" data-question-id="' + esc(q.id) + '">';
     html += '<div class="question-prompt">' + (qi + 1) + '. ' + esc(q.prompt) + '</div>';
     html += '<div class="question-options">';
     q.options.forEach(function(opt, oi) {
       var letter = OPTION_LETTERS[oi] || String(oi);
       var sel = answerMap[q.id + ':' + opt.id] ? ' selected' : '';
-      html += '<div class="question-option' + sel + '">';
+      var clickAttr = isAnswered ? '' : ' onclick="selectOption(this)"';
+      html += '<div class="question-option' + sel + '" data-option-id="' + esc(opt.id) + '" data-option-label="' + esc(opt.label) + '"' + clickAttr + '>';
       html += '<span class="option-letter">' + letter + '</span>';
       html += '<span>' + esc(opt.label) + '</span>';
       html += '</div>';
     });
-    html += '</div></div>';
+    html += '</div>';
+    if (!isAnswered) {
+      html += '<input class="question-freeform" data-question-id="' + esc(q.id) + '" placeholder="Or type your own answer..." oninput="onFreeformInput(this)" />';
+    }
+    html += '</div>';
   });
+
+  if (!isAnswered) {
+    html += '<div class="question-submit-row">';
+    html += '<span class="question-error"></span>';
+    html += '<button class="question-submit-btn" onclick="submitQuestionAnswers(this)">Submit</button>';
+    html += '</div>';
+  }
 
   html += '<div class="msg-time">' + (m.createdAt ? shortTime(m.createdAt) : '') + '</div>';
   html += '</div>';
   return html;
+}
+
+function selectOption(el) {
+  var item = el.closest('.question-item');
+  var siblings = item.querySelectorAll('.question-option');
+  siblings.forEach(function(s) { s.classList.remove('active'); });
+  el.classList.add('active');
+  var freeform = item.querySelector('.question-freeform');
+  if (freeform) freeform.value = '';
+  var card = el.closest('.question-card');
+  var errEl = card.querySelector('.question-error');
+  if (errEl) errEl.textContent = '';
+}
+
+function onFreeformInput(el) {
+  var item = el.closest('.question-item');
+  if (el.value.trim()) {
+    item.querySelectorAll('.question-option').forEach(function(o) { o.classList.remove('active'); });
+  }
+  var card = el.closest('.question-card');
+  var errEl = card.querySelector('.question-error');
+  if (errEl) errEl.textContent = '';
+}
+
+async function submitQuestionAnswers(btn) {
+  var card = btn.closest('.question-card');
+  var bubbleId = card.getAttribute('data-bubble-id');
+  var items = card.querySelectorAll('.question-item');
+  var answers = [];
+  var missing = false;
+
+  items.forEach(function(item) {
+    var qId = item.getAttribute('data-question-id');
+    var active = item.querySelector('.question-option.active');
+    var freeform = item.querySelector('.question-freeform');
+    var freeText = freeform ? freeform.value.trim() : '';
+
+    if (active) {
+      answers.push({
+        questionId: qId,
+        selectedOptionId: active.getAttribute('data-option-id'),
+        freeformText: null,
+      });
+    } else if (freeText) {
+      answers.push({
+        questionId: qId,
+        selectedOptionId: null,
+        freeformText: freeText,
+      });
+    } else {
+      missing = true;
+    }
+  });
+
+  var errEl = card.querySelector('.question-error');
+  if (missing) {
+    if (errEl) errEl.textContent = 'Please answer all questions';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+  if (errEl) errEl.textContent = '';
+
+  try {
+    var res = await fetch(API + '/api/conversations/' + activeConvId + '/answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bubbleId: bubbleId, answers: answers, workspaceHash: activeWorkspaceHash }),
+    });
+    if (!res.ok) throw new Error('failed');
+    await refreshMessages();
+  } catch (e) {
+    if (errEl) errEl.textContent = 'Failed to submit';
+    btn.disabled = false;
+    btn.textContent = 'Submit';
+  }
 }
 
 function buildMessagesHtml(messages) {

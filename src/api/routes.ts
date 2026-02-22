@@ -4,7 +4,7 @@ import { SessionManager } from '../services/session-manager';
 import { TelegramNotificationService } from '../services/telegram-notification-service';
 import { listWorkspaces, listConversations, getConversation, getWaitingConversations } from '../services/cursor-conversations';
 import { logger } from '../utils/logger';
-import { appendToConversation } from '../services/cursor-memory';
+import { appendToConversation, submitQuestionAnswer } from '../services/cursor-memory';
 import { resumeConversation } from '../services/cursor-cli';
 import { chatPageHtml } from './chat-page';
 
@@ -166,6 +166,49 @@ export async function registerRoutes(
     });
 
     reply.send({ status: 'queued' });
+  });
+
+  app.post('/api/conversations/:id/answer', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as {
+      bubbleId: string;
+      answers: { questionId: string; selectedOptionId: string | null; freeformText: string | null }[];
+      workspaceHash?: string;
+    };
+
+    if (!body.bubbleId || !Array.isArray(body.answers) || body.answers.length === 0) {
+      reply.code(400).send({ error: 'bubbleId and answers are required' });
+      return;
+    }
+
+    // Build structured answers for the DB write
+    const dbAnswers = body.answers.map(a => ({
+      questionId: a.questionId,
+      selectedOptionId: a.selectedOptionId ?? '__freeform__',
+      freeformText: a.freeformText ?? undefined,
+    }));
+
+    const ok = submitQuestionAnswer(id, body.bubbleId, dbAnswers);
+    if (!ok) {
+      reply.code(500).send({ error: 'failed to write answer to cursor DB' });
+      return;
+    }
+
+    // Build summary prompt for the agent
+    const summaryLines = body.answers.map((a, i) => {
+      if (a.freeformText) return `Q${i + 1}: ${a.freeformText}`;
+      return `Q${i + 1}: selected option ${a.selectedOptionId}`;
+    });
+    const summaryPrompt = `User answered questions:\n${summaryLines.join('\n')}`;
+
+    let workspacePath: string | null = null;
+    if (body.workspaceHash) {
+      const ws = listWorkspaces().find(w => w.hash === body.workspaceHash);
+      if (ws) workspacePath = ws.folder;
+    }
+
+    resumeConversation(id, summaryPrompt, workspacePath);
+    reply.send({ status: 'submitted' });
   });
 
   // --- Periodic scan for "needs input" conversations ---
