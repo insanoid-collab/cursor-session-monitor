@@ -197,15 +197,35 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .plan-card-actions .review-badge.approved { background: var(--green-dim); color: var(--green); }
 .plan-card-actions .review-badge.rejected { background: rgba(255,107,107,0.15); color: var(--orange); }
 .plan-card.approved { border-color: var(--green); border-left-color: var(--green); }
-.plan-full-md { margin-top: 10px; padding: 14px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--border); max-height: 400px; overflow-y: auto; font-size: 12px; line-height: 1.6; }
-.plan-full-md h1, .plan-full-md h2, .plan-full-md h3 { color: var(--text-bright); font-weight: 600; margin: 10px 0 4px; }
-.plan-full-md h1 { font-size: 15px; } .plan-full-md h2 { font-size: 13px; } .plan-full-md h3 { font-size: 12px; }
-.plan-full-md ul, .plan-full-md ol { padding-left: 20px; margin: 4px 0; }
-.plan-full-md li { margin: 2px 0; }
-.plan-full-md strong { color: var(--text-bright); }
-.plan-full-md code { background: var(--code-bg); padding: 2px 5px; border-radius: 3px; font-size: 11px; }
-.plan-full-md a { color: var(--accent); }
 .plan-card .msg-time { margin-top: 8px; }
+
+/* Plan drawer */
+#plan-drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; opacity: 0; transition: opacity 0.3s ease; }
+#plan-drawer-overlay.open { display: block; opacity: 1; }
+#plan-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(640px, 90vw); background: var(--bg-elevated); z-index: 201; transform: translateX(100%); transition: transform 0.3s ease, width 0.3s ease; display: flex; flex-direction: column; box-shadow: -4px 0 24px rgba(0,0,0,0.4); }
+#plan-drawer.open { transform: translateX(0); }
+#plan-drawer.fullscreen { width: 100vw; }
+#plan-drawer-header { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+#plan-drawer-header .drawer-title { flex: 1; font-size: 14px; font-weight: 600; color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#plan-drawer-header button { background: none; border: 1px solid var(--border); border-radius: var(--radius-xs); padding: 5px 10px; color: var(--text-dim); cursor: pointer; font-size: 13px; font-family: inherit; transition: all var(--transition); }
+#plan-drawer-header button:hover { border-color: var(--accent); color: var(--accent); }
+#plan-drawer-body { flex: 1; overflow-y: auto; padding: 24px; }
+.drawer-md { font-size: 13px; line-height: 1.7; color: var(--text); }
+.drawer-md h1, .drawer-md h2, .drawer-md h3 { color: var(--text-bright); font-weight: 600; margin: 16px 0 6px; }
+.drawer-md h1 { font-size: 18px; } .drawer-md h2 { font-size: 15px; } .drawer-md h3 { font-size: 13px; }
+.drawer-md ul, .drawer-md ol { padding-left: 24px; margin: 6px 0; }
+.drawer-md li { margin: 3px 0; }
+.drawer-md strong { color: var(--text-bright); }
+.drawer-md code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-family: 'SF Mono', 'Fira Code', Menlo, monospace; font-size: 12px; color: var(--text-bright); }
+.drawer-md pre { background: var(--pre-bg); padding: 14px; border-radius: var(--radius-sm); overflow-x: auto; margin: 10px 0; border: 1px solid var(--border); }
+.drawer-md pre code { background: none; padding: 0; color: var(--text); }
+.drawer-md a { color: var(--accent); }
+.drawer-md table { border-collapse: collapse; margin: 10px 0; font-size: 12px; width: 100%; }
+.drawer-md th, .drawer-md td { padding: 8px 12px; border: 1px solid var(--border); text-align: left; }
+.drawer-md th { background: var(--surface); color: var(--text-bright); font-weight: 600; }
+.drawer-md hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+.drawer-md .mermaid { background: var(--surface); border-radius: var(--radius-sm); padding: 16px; margin: 10px 0; text-align: center; overflow-x: auto; }
+.drawer-md .mermaid svg { max-width: 100%; }
 
 /* Code & markdown */
 .message code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-family: 'SF Mono', 'Fira Code', Menlo, monospace; font-size: 12px; color: var(--text-bright); }
@@ -309,6 +329,15 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
       <div id="running-indicator"><span class="pulse"></span>Agent is running...</div>
     </div>
   </div>
+</div>
+<div id="plan-drawer-overlay" onclick="closePlanDrawer()"></div>
+<div id="plan-drawer">
+  <div id="plan-drawer-header">
+    <span class="drawer-title">Plan</span>
+    <button onclick="toggleDrawerFullscreen()" title="Toggle fullscreen">&#x26F6;</button>
+    <button onclick="closePlanDrawer()" title="Close">&times;</button>
+  </div>
+  <div id="plan-drawer-body"><div class="drawer-md"></div></div>
 </div>
 <script>
 const API = '';
@@ -618,6 +647,7 @@ function buildSubagentHtml(m) {
 
 function buildPlanHtml(m) {
   var p = m.plan;
+  if (p.markdown) storePlanData(m.bubbleId, p.markdown, p.name);
   var isApproved = p.reviewStatus === 'Approved';
   var isRejected = p.reviewStatus === 'Rejected';
   var isPending = p.reviewStatus === 'Requested';
@@ -641,7 +671,9 @@ function buildPlanHtml(m) {
   }
   // Actions: View Plan + Approve/Reject
   html += '<div class="plan-card-actions">';
-  html += '<button class="plan-view-btn" onclick="togglePlanMarkdown(this)">View Plan</button>';
+  if (p.markdown) {
+    html += '<button class="plan-view-btn" onclick="openPlanDrawerForBubble(\\'' + esc(m.bubbleId) + '\\')">View Plan</button>';
+  }
   if (isPending) {
     html += '<button class="plan-approve-btn" onclick="submitPlanReview(this, \\'approve\\')">Approve</button>';
     html += '<button class="plan-reject-btn" onclick="submitPlanReview(this, \\'reject\\')">Reject</button>';
@@ -650,23 +682,85 @@ function buildPlanHtml(m) {
     html += '<span class="plan-status"><span class="review-badge ' + badgeCls + '">' + esc(p.reviewStatus) + '</span></span>';
   }
   html += '</div>';
-  // Hidden full plan markdown
-  if (p.markdown) {
-    html += '<div class="plan-full-md" style="display:none">' + renderMarkdown(p.markdown) + '</div>';
-  }
   html += '<div class="msg-time">' + (m.createdAt ? shortTime(m.createdAt) : '') + '</div>';
   html += '</div>';
   return html;
 }
 
-function togglePlanMarkdown(btn) {
-  var card = btn.closest('.plan-card');
-  var md = card.querySelector('.plan-full-md');
-  if (!md) return;
-  var showing = md.style.display !== 'none';
-  md.style.display = showing ? 'none' : 'block';
-  btn.textContent = showing ? 'View Plan' : 'Hide Plan';
+var planDataStore = {};
+
+function storePlanData(bubbleId, markdown, name) {
+  planDataStore[bubbleId] = { markdown: markdown, name: name };
 }
+
+function openPlanDrawerForBubble(bubbleId) {
+  var data = planDataStore[bubbleId];
+  if (!data) return;
+  openPlanDrawer(data.markdown, data.name);
+}
+
+var mermaidLoaded = false;
+
+function loadMermaid(cb) {
+  if (mermaidLoaded) { cb(); return; }
+  var s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+  s.onload = function() {
+    window.mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: { primaryColor: '#6c63ff', primaryTextColor: '#e8e8f0', lineColor: '#6b6b80', secondaryColor: '#1a1a24', tertiaryColor: '#22222e' } });
+    mermaidLoaded = true;
+    cb();
+  };
+  document.head.appendChild(s);
+}
+
+function renderDrawerMarkdown(raw) {
+  // Convert markdown to HTML, with special handling for mermaid blocks
+  var mermaidBlocks = [];
+  var src = raw.replace(/\\\`\\\`\\\`mermaid\\n([\\s\\S]*?)\\\`\\\`\\\`/g, function(_, code) {
+    mermaidBlocks.push(code);
+    return '%%MERMAID' + (mermaidBlocks.length - 1) + '%%';
+  });
+  var html = renderMarkdown(src);
+  html = html.replace(/%%MERMAID(\\d+)%%/g, function(_, i) {
+    return '<div class="mermaid">' + esc(mermaidBlocks[parseInt(i)]) + '</div>';
+  });
+  return { html: html, hasMermaid: mermaidBlocks.length > 0 };
+}
+
+function openPlanDrawer(markdown, title) {
+  var overlay = document.getElementById('plan-drawer-overlay');
+  var drawer = document.getElementById('plan-drawer');
+  var body = drawer.querySelector('.drawer-md');
+  var titleEl = drawer.querySelector('.drawer-title');
+  titleEl.textContent = title || 'Plan';
+
+  var result = renderDrawerMarkdown(markdown);
+  body.innerHTML = result.html;
+
+  overlay.classList.add('open');
+  drawer.classList.add('open');
+
+  if (result.hasMermaid) {
+    loadMermaid(function() {
+      try { window.mermaid.run({ nodes: body.querySelectorAll('.mermaid') }); } catch(e) { console.warn('mermaid render error', e); }
+    });
+  }
+}
+
+function closePlanDrawer() {
+  document.getElementById('plan-drawer-overlay').classList.remove('open');
+  var drawer = document.getElementById('plan-drawer');
+  drawer.classList.remove('open');
+  drawer.classList.remove('fullscreen');
+}
+
+function toggleDrawerFullscreen() {
+  document.getElementById('plan-drawer').classList.toggle('fullscreen');
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closePlanDrawer();
+});
 
 async function submitPlanReview(btn, action) {
   var card = btn.closest('.plan-card');
