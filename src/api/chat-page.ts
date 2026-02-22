@@ -170,6 +170,24 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .subagent-inline .sa-body { flex: 1; min-width: 0; }
 .subagent-inline .sa-title { font-size: 13px; font-weight: 500; color: var(--text-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .subagent-inline .sa-status { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+.subagent-inline .sa-chevron { color: var(--text-dim); font-size: 18px; flex-shrink: 0; opacity: 0.4; transition: opacity var(--transition); }
+.subagent-inline:hover .sa-chevron { opacity: 1; color: var(--accent); }
+
+/* Plan cards */
+.plan-card { align-self: flex-start; max-width: 75%; margin: 6px 0; background: var(--surface); border: 1px solid var(--accent); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); padding: 14px 18px; }
+.plan-card-header { font-size: 11px; color: var(--accent); font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.plan-card-name { font-size: 15px; font-weight: 600; color: var(--text-bright); margin-bottom: 4px; }
+.plan-card-overview { font-size: 12px; color: var(--text); margin-bottom: 10px; line-height: 1.5; }
+.plan-card-todos { display: flex; flex-direction: column; gap: 6px; }
+.plan-todo { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--text); padding: 6px 10px; border-radius: var(--radius-xs); background: var(--bg); }
+.plan-todo .todo-check { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--border-strong); flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+.plan-todo.done .todo-check { border-color: var(--green); background: var(--green-dim); color: var(--green); }
+.plan-todo.done { color: var(--text-dim); }
+.plan-card-review { font-size: 11px; color: var(--text-dim); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.plan-card-review .review-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+.plan-card-review .review-badge.requested { background: var(--orange-dim); color: var(--orange); }
+.plan-card-review .review-badge.approved { background: var(--green-dim); color: var(--green); }
+.plan-card .msg-time { margin-top: 8px; }
 
 /* Code & markdown */
 .message code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-family: 'SF Mono', 'Fira Code', Menlo, monospace; font-size: 12px; color: var(--text-bright); }
@@ -558,6 +576,7 @@ async function loadEarlierMessages() {
 function isThinkingStep(m) {
   if (m.askQuestion) return false;
   if (m.subagentTask) return false;
+  if (m.plan) return false;
   return m.type === 2 && m.text.length < 300 && !/^#/.test(m.text.trim());
 }
 
@@ -568,13 +587,43 @@ function buildSubagentHtml(m) {
   var statusText = sa.status === 'success' ? 'Completed' : sa.status === 'error' ? 'Failed' : 'Running...';
   if (sa.terminationReason === 'error' && sa.status !== 'error') statusText = 'Errored';
   var clickAttr = sa.subagentId ? ' onclick="switchToAgent(\\'' + esc(sa.subagentId) + '\\')"' : '';
+  var chevron = sa.subagentId ? '<div class="sa-chevron">&#8250;</div>' : '';
   return '<div class="subagent-inline ' + statusCls + '"' + clickAttr + '>' +
     '<div class="sa-icon">' + icon + '</div>' +
     '<div class="sa-body">' +
       '<div class="sa-title" title="' + esc(sa.description) + '">' + esc(sa.description || 'Sub-agent') + '</div>' +
       '<div class="sa-status">' + statusText + '</div>' +
     '</div>' +
+    chevron +
   '</div>';
+}
+
+function buildPlanHtml(m) {
+  var p = m.plan;
+  var html = '<div class="plan-card">';
+  html += '<div class="plan-card-header">&#9776; Plan</div>';
+  html += '<div class="plan-card-name">' + esc(p.name) + '</div>';
+  if (p.overview) {
+    html += '<div class="plan-card-overview">' + esc(p.overview) + '</div>';
+  }
+  if (p.todos && p.todos.length > 0) {
+    html += '<div class="plan-card-todos">';
+    p.todos.forEach(function(todo) {
+      var done = todo.status === 'completed' || todo.status === 'done';
+      html += '<div class="plan-todo' + (done ? ' done' : '') + '">';
+      html += '<div class="todo-check">' + (done ? '&#10003;' : '') + '</div>';
+      html += '<span>' + esc(todo.content) + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  if (p.reviewStatus && p.reviewStatus !== 'unknown') {
+    var badgeCls = p.reviewStatus === 'Approved' ? 'approved' : 'requested';
+    html += '<div class="plan-card-review">Review: <span class="review-badge ' + badgeCls + '">' + esc(p.reviewStatus) + '</span></div>';
+  }
+  html += '<div class="msg-time">' + (m.createdAt ? shortTime(m.createdAt) : '') + '</div>';
+  html += '</div>';
+  return html;
 }
 
 var thinkingCounter = 0;
@@ -725,7 +774,10 @@ function buildMessagesHtml(messages) {
   var i = 0;
   while (i < messages.length) {
     var m = messages[i];
-    if (m.subagentTask) {
+    if (m.plan) {
+      html += buildPlanHtml(m);
+      i++;
+    } else if (m.subagentTask) {
       html += buildSubagentHtml(m);
       i++;
     } else if (m.askQuestion && m.askQuestion.questions && m.askQuestion.questions.length > 0) {

@@ -71,6 +71,12 @@ export interface ChatMessage {
     terminationReason: string | null;
     subagentId: string;
   };
+  plan?: {
+    name: string;
+    overview: string;
+    todos: { id: string; content: string; status: string }[];
+    reviewStatus: string; // 'Requested' | 'Approved' | 'Rejected'
+  };
 }
 
 function shortName(folder: string): string {
@@ -359,8 +365,27 @@ export function getConversation(
           } catch { /* malformed params */ }
         }
 
-        // Allow empty text for ask_question and task_v2 bubbles
-        if ((!msg.text || msg.text.length === 0) && !askQuestion && !subagentTask) continue;
+        // Build create_plan data if present
+        let plan: ChatMessage['plan'];
+        if (tfd?.name === 'create_plan') {
+          try {
+            const params = JSON.parse(tfd.params ?? '{}');
+            const ad = tfd.additionalData ?? {};
+            plan = {
+              name: params.name ?? 'Plan',
+              overview: params.overview ?? '',
+              todos: (params.todos ?? []).map((t: any) => ({
+                id: t.id ?? '',
+                content: t.content ?? '',
+                status: t.status ?? 'pending',
+              })),
+              reviewStatus: ad.reviewData?.status ?? 'unknown',
+            };
+          } catch { /* malformed params */ }
+        }
+
+        // Allow empty text for special bubble types
+        if ((!msg.text || msg.text.length === 0) && !askQuestion && !subagentTask && !plan) continue;
 
         messages.push({
           bubbleId: msg.bubbleId,
@@ -370,6 +395,7 @@ export function getConversation(
           isAgentic: msg.isAgentic ?? false,
           askQuestion,
           subagentTask,
+          plan,
         });
       } catch {
         continue;
