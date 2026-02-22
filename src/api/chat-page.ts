@@ -107,11 +107,6 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .agent-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .agent-tab .tab-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
 .agent-tab .tab-badge { font-size: 10px; color: var(--accent); opacity: 0.6; }
-.agent-tab.more-tab { color: var(--text-dim); font-size: 11px; padding: 10px 14px; margin-left: auto; letter-spacing: 0; }
-.agent-tab.more-tab.expanded { color: var(--accent); }
-.older-agents { display: none; }
-.older-agents.show { display: contents; }
-
 /* Main area */
 #main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
 #main-header { padding: 14px 24px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 500; color: var(--text-dim); display: flex; align-items: center; gap: 10px; min-height: 52px; background: var(--bg-elevated); }
@@ -164,6 +159,17 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .question-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .question-error { color: var(--orange); font-size: 11px; }
 .question-card .msg-time { margin-top: 8px; }
+
+/* Inline sub-agent cards */
+.subagent-inline { align-self: flex-start; max-width: 60%; margin: 4px 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 16px; cursor: pointer; transition: all var(--transition); display: flex; align-items: center; gap: 10px; }
+.subagent-inline:hover { border-color: var(--accent); background: var(--surface-hover); }
+.subagent-inline .sa-icon { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+.subagent-inline.sa-success .sa-icon { background: rgba(0,214,143,0.15); color: var(--green); }
+.subagent-inline.sa-error .sa-icon { background: rgba(255,107,107,0.15); color: var(--orange); }
+.subagent-inline.sa-loading .sa-icon { background: rgba(108,99,255,0.15); color: var(--accent); animation: pulse 2s ease-in-out infinite; }
+.subagent-inline .sa-body { flex: 1; min-width: 0; }
+.subagent-inline .sa-title { font-size: 13px; font-weight: 500; color: var(--text-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.subagent-inline .sa-status { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
 
 /* Code & markdown */
 .message code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-family: 'SF Mono', 'Fira Code', Menlo, monospace; font-size: 12px; color: var(--text-bright); }
@@ -409,8 +415,6 @@ async function toggleWorkspace(header, hash) {
 
 var activeRootConvId = null;
 
-var olderAgentsExpanded = false;
-
 function agentTabHtml(c, rootId) {
   var status = activityStatus(c.lastMessageAt, c.lastMessageType, c.lastMessageLength);
   var dotClass = status === 'running' ? 'running' : (status === 'recent' ? 'recent' : (status === 'waiting' ? 'waiting' : 'stale'));
@@ -431,34 +435,26 @@ function renderAgentTabs(rootId) {
     tabs.innerHTML = '';
     return;
   }
-  var RECENT_MINS = 5;
+  // Only show tabs for actively running children (recent activity) or the currently viewed agent
+  var ACTIVE_MINS = 5;
   var now = Date.now();
-  var recent = [];
-  var older = [];
+  var running = [];
   for (var i = 0; i < root.children.length; i++) {
     var child = root.children[i];
     var age = child.lastMessageAt ? (now - new Date(child.lastMessageAt).getTime()) / 60000 : 9999;
-    if (age < RECENT_MINS || child.id === activeConvId) {
-      recent.push(child);
-    } else {
-      older.push(child);
+    var status = activityStatus(child.lastMessageAt, child.lastMessageType, child.lastMessageLength);
+    if (status === 'running' || status === 'recent' || age < ACTIVE_MINS || child.id === activeConvId) {
+      running.push(child);
     }
+  }
+  // If no active children and we're viewing the root, hide tabs entirely
+  if (running.length === 0 && activeConvId === rootId) {
+    tabs.innerHTML = '';
+    return;
   }
   var html = agentTabHtml(root, rootId);
-  for (var j = 0; j < recent.length; j++) html += agentTabHtml(recent[j], rootId);
-  if (older.length > 0) {
-    if (olderAgentsExpanded) {
-      for (var k = 0; k < older.length; k++) html += agentTabHtml(older[k], rootId);
-    }
-    html += '<div class="agent-tab more-tab' + (olderAgentsExpanded ? ' expanded' : '') + '" onclick="toggleOlderAgents()">' +
-      (olderAgentsExpanded ? 'Less' : older.length + ' more') + '</div>';
-  }
+  for (var j = 0; j < running.length; j++) html += agentTabHtml(running[j], rootId);
   tabs.innerHTML = html;
-}
-
-function toggleOlderAgents() {
-  olderAgentsExpanded = !olderAgentsExpanded;
-  renderAgentTabs(activeRootConvId);
 }
 
 async function switchToAgent(id) {
@@ -561,7 +557,24 @@ async function loadEarlierMessages() {
 
 function isThinkingStep(m) {
   if (m.askQuestion) return false;
+  if (m.subagentTask) return false;
   return m.type === 2 && m.text.length < 300 && !/^#/.test(m.text.trim());
+}
+
+function buildSubagentHtml(m) {
+  var sa = m.subagentTask;
+  var statusCls = 'sa-' + (sa.status || 'loading');
+  var icon = sa.status === 'success' ? '&#10003;' : sa.status === 'error' ? '&#10007;' : '&#9679;';
+  var statusText = sa.status === 'success' ? 'Completed' : sa.status === 'error' ? 'Failed' : 'Running...';
+  if (sa.terminationReason === 'error' && sa.status !== 'error') statusText = 'Errored';
+  var clickAttr = sa.subagentId ? ' onclick="switchToAgent(\\'' + esc(sa.subagentId) + '\\')"' : '';
+  return '<div class="subagent-inline ' + statusCls + '"' + clickAttr + '>' +
+    '<div class="sa-icon">' + icon + '</div>' +
+    '<div class="sa-body">' +
+      '<div class="sa-title" title="' + esc(sa.description) + '">' + esc(sa.description || 'Sub-agent') + '</div>' +
+      '<div class="sa-status">' + statusText + '</div>' +
+    '</div>' +
+  '</div>';
 }
 
 var thinkingCounter = 0;
@@ -712,7 +725,10 @@ function buildMessagesHtml(messages) {
   var i = 0;
   while (i < messages.length) {
     var m = messages[i];
-    if (m.askQuestion && m.askQuestion.questions && m.askQuestion.questions.length > 0) {
+    if (m.subagentTask) {
+      html += buildSubagentHtml(m);
+      i++;
+    } else if (m.askQuestion && m.askQuestion.questions && m.askQuestion.questions.length > 0) {
       html += buildQuestionHtml(m);
       i++;
     } else if (m.type === 1) {

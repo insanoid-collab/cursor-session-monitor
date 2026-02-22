@@ -65,6 +65,12 @@ export interface ChatMessage {
     questions: PendingQuestion[];
     answers?: { questionId: string; selectedOptionIds: string[] }[];
   };
+  subagentTask?: {
+    description: string;
+    status: string; // 'loading' | 'success' | 'error'
+    terminationReason: string | null;
+    subagentId: string;
+  };
 }
 
 function shortName(folder: string): string {
@@ -338,8 +344,23 @@ export function getConversation(
           } catch { /* malformed params */ }
         }
 
-        // Allow empty text for ask_question bubbles (text is always empty for them)
-        if ((!msg.text || msg.text.length === 0) && !askQuestion) continue;
+        // Build task_v2 (sub-agent) data if present
+        let subagentTask: ChatMessage['subagentTask'];
+        if (tfd?.name === 'task_v2') {
+          try {
+            const params = JSON.parse(tfd.params ?? '{}');
+            const ad = tfd.additionalData ?? {};
+            subagentTask = {
+              description: params.description ?? '',
+              status: ad.status ?? 'loading',
+              terminationReason: ad.terminationReason ?? null,
+              subagentId: ad.subagentComposerId ?? '',
+            };
+          } catch { /* malformed params */ }
+        }
+
+        // Allow empty text for ask_question and task_v2 bubbles
+        if ((!msg.text || msg.text.length === 0) && !askQuestion && !subagentTask) continue;
 
         messages.push({
           bubbleId: msg.bubbleId,
@@ -348,6 +369,7 @@ export function getConversation(
           createdAt: msg.createdAt ?? '',
           isAgentic: msg.isAgentic ?? false,
           askQuestion,
+          subagentTask,
         });
       } catch {
         continue;
