@@ -1,48 +1,37 @@
 import axios from 'axios';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { AppConfig } from '../../config';
+import { logger } from '../../utils/logger';
 
-const execFileAsync = promisify(execFile);
+export interface SendResult {
+  messageId?: number;
+}
 
 export interface Notifier {
-  send(message: string): Promise<void>;
+  send(message: string): Promise<SendResult>;
 }
 
-export class OpenClawMessageNotifier implements Notifier {
-  constructor(private readonly channel: string, private readonly target: string, private readonly account?: string) {}
-
-  async send(message: string): Promise<void> {
-    const args = ['message', 'send', '--channel', this.channel, '--target', this.target, '--message', message];
-    if (this.account) {
-      args.push('--accountId', this.account);
-    }
-    await execFileAsync('openclaw', args);
-  }
-}
-
-export class TelegramBotApiNotifier implements Notifier {
+export class TelegramNotifier implements Notifier {
   constructor(private readonly token: string, private readonly chatId: string) {}
 
-  async send(message: string): Promise<void> {
+  async send(message: string): Promise<SendResult> {
     const url = `https://api.telegram.org/bot${this.token}/sendMessage`;
-    await axios.post(url, {
-      chat_id: this.chatId,
-      text: message,
-      parse_mode: 'Markdown',
-      disable_web_page_preview: true,
-    });
+    try {
+      const res = await axios.post(url, {
+        chat_id: this.chatId,
+        text: message,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      });
+      return { messageId: res.data?.result?.message_id };
+    } catch (err) {
+      logger.error(`telegram send failed: ${String(err)}`);
+      return {};
+    }
   }
 }
 
 export function createNotifier(config: AppConfig): Notifier | null {
   if (!config.telegram.enabled) return null;
-
-  if (config.telegram.mode === 'bot_api') {
-    if (!config.telegram.botToken || !config.telegram.chatId) return null;
-    return new TelegramBotApiNotifier(config.telegram.botToken, config.telegram.chatId);
-  }
-
-  if (!config.telegram.target) return null;
-  return new OpenClawMessageNotifier(config.telegram.channel, config.telegram.target, config.telegram.account);
+  if (!config.telegram.botToken || !config.telegram.chatId) return null;
+  return new TelegramNotifier(config.telegram.botToken, config.telegram.chatId);
 }

@@ -5,10 +5,15 @@
   "main": "dist/index.js",
   "type": "commonjs",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "portless cursor-monitor tsx watch src/index.ts",
+    "dev:direct": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
-    "test": "vitest run"
+    "start": "portless cursor-monitor node dist/index.js",
+    "start:direct": "node dist/index.js",
+    "test": "vitest run",
+    "sessions": "tsx scripts/sessions.ts",
+    "hooks:install": "node scripts/install-hooks.js",
+    "hooks:uninstall": "node scripts/install-hooks.js --uninstall"
   },
   "keywords": [
     "cursor",

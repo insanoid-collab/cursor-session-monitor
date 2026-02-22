@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     working_directory TEXT,
     needs_attention INTEGER DEFAULT 0,
     attention_reason TEXT,
+    last_response_text TEXT,
     metadata TEXT
 );
 
@@ -39,5 +40,12 @@ CREATE TABLE IF NOT EXISTS session_commands (
     executed_at TEXT NOT NULL,
     cwd TEXT,
     flagged INTEGER DEFAULT 0,
+    FOREIGN KEY (session_id) REFERENCES sessions(session_id)
+);
+
+CREATE TABLE IF NOT EXISTS telegram_messages (
+    telegram_message_id INTEGER PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
     FOREIGN KEY (session_id) REFERENCES sessions(session_id)
 );

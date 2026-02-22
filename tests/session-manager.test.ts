@@ -15,6 +15,7 @@ function setupDb() {
       working_directory TEXT,
       needs_attention INTEGER DEFAULT 0,
       attention_reason TEXT,
+      last_response_text TEXT,
       metadata TEXT
     );
     CREATE TABLE events (

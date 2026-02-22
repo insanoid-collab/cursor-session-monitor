@@ -1,50 +1,29 @@
 import { AppConfig } from '../config';
-import { NotificationBatcher } from './notification-batcher';
 import { Notifier } from './notifier/telegram-notifier';
+import { TelegramMessageStore } from './telegram-message-store';
 import {
   dangerousCommandTemplate,
   sessionCompleteTemplate,
-  sessionStartTemplate,
+  SessionSummary,
 } from './templates/notification-templates';
 
 export class TelegramNotificationService {
-  private readonly batcher: NotificationBatcher;
-
-  constructor(private readonly notifier: Notifier, private readonly config: AppConfig) {
-    this.batcher = new NotificationBatcher(notifier, {
-      fileIntervalMs: config.telegram.thresholds.fileEditBatchIntervalSeconds * 1000,
-      fileMinEvents: config.telegram.thresholds.fileEditMinEvents,
-      shellIntervalMs: config.telegram.thresholds.shellBatchIntervalSeconds * 1000,
-      shellMinEvents: config.telegram.thresholds.shellMinEvents,
-    });
-  }
-
-  async onSessionStart(sessionId: string, cwd?: string | null): Promise<void> {
-    if (!this.config.telegram.notifyOn.sessionStart) return;
-    await this.notifier.send(sessionStartTemplate(sessionId, cwd));
-  }
-
-  onFileEdit(sessionId: string, filePath: string): void {
-    if (!this.config.telegram.notifyOn.fileEdit) return;
-    this.batcher.queueFileEdit(sessionId, filePath);
-  }
-
-  onShellCommand(sessionId: string, command: string): void {
-    if (!this.config.telegram.notifyOn.shellCommand) return;
-    this.batcher.queueShellCommand(sessionId, command);
-  }
+  constructor(
+    private readonly notifier: Notifier,
+    private readonly config: AppConfig,
+    private readonly messageStore?: TelegramMessageStore,
+  ) {}
 
   async onDangerousCommand(sessionId: string, command: string, cwd?: string | null): Promise<void> {
     if (!this.config.telegram.notifyOn.attentionNeeded) return;
     await this.notifier.send(dangerousCommandTemplate(sessionId, command, cwd));
   }
 
-  async onSessionComplete(
-    sessionId: string,
-    summary: { filesModified: number; commandsExecuted: number; durationMinutes: number },
-  ): Promise<void> {
+  async onSessionComplete(sessionId: string, summary: SessionSummary): Promise<void> {
     if (!this.config.telegram.notifyOn.sessionEnd) return;
-    await this.batcher.flushSession(sessionId);
-    await this.notifier.send(sessionCompleteTemplate(sessionId, summary));
+    const result = await this.notifier.send(sessionCompleteTemplate(sessionId, summary));
+    if (result.messageId && this.messageStore) {
+      this.messageStore.saveMapping(result.messageId, sessionId);
+    }
   }
 }

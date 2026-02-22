@@ -1,0 +1,119 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import Database from 'better-sqlite3';
+import { randomUUID } from 'node:crypto';
+import { logger } from '../utils/logger';
+
+const GLOBAL_STATE_DB = path.join(
+  process.env.HOME ?? '',
+  'Library',
+  'Application Support',
+  'Cursor',
+  'User',
+  'globalStorage',
+  'state.vscdb',
+);
+
+interface MinimalBubble {
+  _v: number;
+  type: number; // 1 = user, 2 = assistant
+  bubbleId: string;
+  text: string;
+  createdAt: string;
+  isAgentic: boolean;
+  unifiedMode: number;
+  // Required empty arrays to match schema
+  approximateLintErrors: never[];
+  lints: never[];
+  codebaseContextChunks: never[];
+  commits: never[];
+  pullRequests: never[];
+  attachedCodeChunks: never[];
+  assistantSuggestedDiffs: never[];
+  gitDiffs: never[];
+  interpreterResults: never[];
+  images: never[];
+  suggestedCodeBlocks: never[];
+  toolResults: never[];
+  cursorRules: never[];
+  allThinkingBlocks: never[];
+}
+
+function createBubble(type: 1 | 2, text: string): MinimalBubble {
+  return {
+    _v: 3,
+    type,
+    bubbleId: randomUUID(),
+    text,
+    createdAt: new Date().toISOString(),
+    isAgentic: true,
+    unifiedMode: type === 1 ? 1 : 2,
+    approximateLintErrors: [],
+    lints: [],
+    codebaseContextChunks: [],
+    commits: [],
+    pullRequests: [],
+    attachedCodeChunks: [],
+    assistantSuggestedDiffs: [],
+    gitDiffs: [],
+    interpreterResults: [],
+    images: [],
+    suggestedCodeBlocks: [],
+    toolResults: [],
+    cursorRules: [],
+    allThinkingBlocks: [],
+  };
+}
+
+export function appendToConversation(
+  conversationId: string,
+  prompt: string,
+  response: string,
+): void {
+  if (!fs.existsSync(GLOBAL_STATE_DB)) {
+    logger.warn(`cursor state db not found: ${GLOBAL_STATE_DB}`);
+    return;
+  }
+
+  let db: Database.Database | null = null;
+  try {
+    db = new Database(GLOBAL_STATE_DB);
+
+    // Verify this conversation exists in the DB (range query for index use)
+    const prefix = `bubbleId:${conversationId}:`;
+    const existing = db
+      .prepare('SELECT COUNT(*) as cnt FROM cursorDiskKV WHERE key >= ? AND key < ?')
+      .get(prefix, prefix + '\xff') as { cnt: number } | undefined;
+
+    if (!existing || existing.cnt === 0) {
+      logger.info(`conversation ${conversationId} not found in cursor DB, skipping memory injection`);
+      return;
+    }
+
+    // Create user bubble (the Telegram prompt)
+    const userBubble = createBubble(1, `[via Telegram] ${prompt}`);
+    const userKey = `bubbleId:${conversationId}:${userBubble.bubbleId}`;
+
+    // Create assistant bubble (the agent response)
+    const assistantBubble = createBubble(2, response);
+    const assistantKey = `bubbleId:${conversationId}:${assistantBubble.bubbleId}`;
+
+    const insert = db.prepare(
+      'INSERT OR REPLACE INTO cursorDiskKV (key, value) VALUES (?, ?)',
+    );
+
+    const tx = db.transaction(() => {
+      insert.run(userKey, JSON.stringify(userBubble));
+      insert.run(assistantKey, JSON.stringify(assistantBubble));
+    });
+
+    tx();
+    logger.info(
+      `injected 2 bubbles into conversation ${conversationId} (user: ${userBubble.bubbleId}, assistant: ${assistantBubble.bubbleId})`,
+    );
+  } catch (err) {
+    logger.error(`failed to inject into cursor conversation: ${String(err)}`);
+  } finally {
+    db?.close();
+  }
+}

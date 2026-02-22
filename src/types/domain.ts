@@ -6,6 +6,7 @@ export type NormalizedEventType =
   | 'session_start'
   | 'file_edit'
   | 'shell_exec'
+  | 'agent_response'
   | 'session_end';
 
 export interface NormalizedEvent {
