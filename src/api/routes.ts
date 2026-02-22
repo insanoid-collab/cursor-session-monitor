@@ -172,7 +172,7 @@ export async function registerRoutes(
     const { id } = req.params as { id: string };
     const body = req.body as {
       bubbleId: string;
-      answers: { questionId: string; selectedOptionId: string | null; freeformText: string | null }[];
+      answers: { questionId: string; selectedOptionId: string | null; selectedLabel: string | null; freeformText: string | null }[];
       workspaceHash?: string;
     };
 
@@ -194,10 +194,10 @@ export async function registerRoutes(
       return;
     }
 
-    // Build summary prompt for the agent
+    // Build summary prompt for the agent using readable labels
     const summaryLines = body.answers.map((a, i) => {
       if (a.freeformText) return `Q${i + 1}: ${a.freeformText}`;
-      return `Q${i + 1}: selected option ${a.selectedOptionId}`;
+      return `Q${i + 1}: ${a.selectedLabel || a.selectedOptionId}`;
     });
     const summaryPrompt = `User answered questions:\n${summaryLines.join('\n')}`;
 

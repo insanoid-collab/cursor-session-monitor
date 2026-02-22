@@ -653,12 +653,14 @@ async function submitQuestionAnswers(btn) {
       answers.push({
         questionId: qId,
         selectedOptionId: active.getAttribute('data-option-id'),
+        selectedLabel: active.getAttribute('data-option-label'),
         freeformText: null,
       });
     } else if (freeText) {
       answers.push({
         questionId: qId,
         selectedOptionId: null,
+        selectedLabel: null,
         freeformText: freeText,
       });
     } else {
@@ -683,7 +685,21 @@ async function submitQuestionAnswers(btn) {
       body: JSON.stringify({ bubbleId: bubbleId, answers: answers, workspaceHash: activeWorkspaceHash }),
     });
     if (!res.ok) throw new Error('failed');
-    await refreshMessages();
+    // Immediately mark card as answered in the UI
+    card.classList.add('answered');
+    var header = card.querySelector('.question-card-header');
+    if (header) header.innerHTML = '&#10003; Submitted';
+    // Replace active highlights with selected style
+    card.querySelectorAll('.question-option.active').forEach(function(o) { o.classList.remove('active'); o.classList.add('selected'); });
+    // Remove freeform inputs and submit row
+    card.querySelectorAll('.question-freeform').forEach(function(f) {
+      if (!f.value.trim()) f.remove();
+      else { f.disabled = true; f.style.opacity = '0.7'; }
+    });
+    var submitRow = card.querySelector('.question-submit-row');
+    if (submitRow) submitRow.remove();
+    // Refresh in background to get server-side state
+    refreshMessages();
   } catch (e) {
     if (errEl) errEl.textContent = 'Failed to submit';
     btn.disabled = false;
