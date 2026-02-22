@@ -98,6 +98,7 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 @keyframes pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(0,214,143,0.5); } 50% { opacity: 0.4; box-shadow: 0 0 2px rgba(0,214,143,0.2); } }
 .subagent-count { font-size: 10px; font-weight: 500; color: var(--accent); background: var(--accent-glow); padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; margin-left: auto; }
 .subagent-badge { font-size: 10px; color: var(--accent); background: var(--accent-glow); padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; }
+.pending-badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; background: var(--orange-dim); color: var(--orange); animation: pulse 2s ease-in-out infinite; }
 
 /* Sub-agent tabs */
 #agent-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 20px; overflow-x: auto; min-height: 0; background: var(--bg-elevated); }
@@ -123,17 +124,6 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .message.assistant .msg-time { text-align: left; }
 
 /* Thinking steps */
-.thinking-group { align-self: flex-start; max-width: 75%; margin: 4px 0; }
-.thinking-group summary { list-style: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 16px; color: var(--text-dim); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all var(--transition); }
-.thinking-group summary:hover { border-color: var(--accent); color: var(--text); background: var(--surface-hover); }
-.thinking-group summary::-webkit-details-marker { display: none; }
-.thinking-group summary .arrow { font-size: 9px; transition: transform var(--transition); display: inline-block; }
-.thinking-group[open] summary .arrow { transform: rotate(90deg); }
-.thinking-group[open] summary { border-color: rgba(108,99,255,0.3); background: var(--surface-hover); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-.thinking-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: 0.6; flex-shrink: 0; }
-.thinking-steps { padding: 0; margin: 0; background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); overflow: hidden; }
-.thinking-step { padding: 8px 16px 8px 34px; font-size: 12px; color: var(--text-dim); white-space: pre-wrap; word-wrap: break-word; position: relative; border-top: 1px solid var(--border); line-height: 1.5; }
-.thinking-step::before { content: ''; position: absolute; left: 16px; top: 14px; width: 5px; height: 5px; border-radius: 50%; background: var(--text-dim); opacity: 0.3; }
 .question-card { align-self: flex-start; max-width: 75%; margin: 6px 0; background: var(--surface); border: 1px solid var(--orange); border-left: 3px solid var(--orange); border-radius: var(--radius-sm); padding: 12px 16px; }
 .question-card.answered { border-color: var(--green); border-left-color: var(--green); opacity: 0.7; }
 .question-card-header { font-size: 11px; color: var(--orange); font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
@@ -224,8 +214,43 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .drawer-md th, .drawer-md td { padding: 8px 12px; border: 1px solid var(--border); text-align: left; }
 .drawer-md th { background: var(--surface); color: var(--text-bright); font-weight: 600; }
 .drawer-md hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
-.drawer-md .mermaid { background: var(--surface); border-radius: var(--radius-sm); padding: 16px; margin: 10px 0; text-align: center; overflow-x: auto; }
-.drawer-md .mermaid svg { max-width: 100%; }
+.drawer-md .mermaid-wrap { background: var(--surface); border-radius: var(--radius-sm); padding: 16px; margin: 10px 0; text-align: center; position: relative; overflow: hidden; cursor: grab; }
+.drawer-md .mermaid-wrap:active { cursor: grabbing; }
+.drawer-md .mermaid-wrap .mermaid-inner { transform-origin: 0 0; transition: transform 0.1s ease; display: inline-block; }
+.drawer-md .mermaid-wrap svg { max-width: none; }
+.mermaid-controls { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 2; }
+.mermaid-controls button { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-xs); width: 28px; height: 28px; color: var(--text-dim); cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: all var(--transition); }
+.mermaid-controls button:hover { border-color: var(--accent); color: var(--accent); }
+/* Fullscreen mermaid overlay */
+#mermaid-fullscreen { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 300; flex-direction: column; }
+#mermaid-fullscreen.open { display: flex; }
+#mermaid-fullscreen .mf-header { display: flex; align-items: center; justify-content: flex-end; padding: 12px 20px; border-bottom: 1px solid var(--border); gap: 8px; }
+#mermaid-fullscreen .mf-header button { background: none; border: 1px solid var(--border); border-radius: var(--radius-xs); padding: 6px 14px; color: var(--text-dim); cursor: pointer; font-size: 13px; transition: all var(--transition); }
+#mermaid-fullscreen .mf-header button:hover { border-color: var(--accent); color: var(--accent); }
+#mermaid-fullscreen .mf-body { flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 24px; }
+#mermaid-fullscreen .mf-body svg { max-width: 95vw; max-height: 85vh; }
+
+/* Activity group — tool calls */
+.activity-group { align-self: flex-start; max-width: 75%; margin: 4px 0; }
+.activity-group summary { list-style: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 16px; color: var(--text-dim); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all var(--transition); }
+.activity-group summary:hover { border-color: var(--accent); color: var(--text); background: var(--surface-hover); }
+.activity-group summary::-webkit-details-marker { display: none; }
+.activity-group summary .arrow { font-size: 9px; transition: transform var(--transition); display: inline-block; }
+.activity-group[open] summary .arrow { transform: rotate(90deg); }
+.activity-group[open] summary { border-color: rgba(108,99,255,0.15); background: var(--surface-hover); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.activity-items { padding: 0; background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); overflow: hidden; }
+.activity-item { padding: 5px 16px 5px 32px; font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; border-top: 1px solid var(--border); font-family: 'SF Mono', 'Fira Code', Menlo, monospace; }
+.activity-item::before { content: ''; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 5px; height: 5px; border-radius: 50%; }
+.activity-item.act-read::before { background: var(--accent); opacity: 0.6; }
+.activity-item.act-edit::before { background: var(--green); opacity: 0.8; }
+.activity-item.act-terminal::before { background: var(--orange); opacity: 0.8; }
+.activity-item.act-search::before { background: #b39ddb; opacity: 0.7; }
+.activity-item.act-web::before { background: #4dd0e1; opacity: 0.7; }
+.activity-item.act-mcp::before, .activity-item.act-other::before { background: var(--text-dim); opacity: 0.4; }
+.activity-item.act-think { font-style: italic; color: var(--text-dim); opacity: 0.7; }
+.activity-item.act-think::before { background: var(--text-dim); opacity: 0.3; }
+.activity-summary { font-size: 11px; color: var(--text-dim); opacity: 0.7; margin-left: 2px; }
+.activity-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: 0.4; flex-shrink: 0; }
 
 /* Code & markdown */
 .message code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-family: 'SF Mono', 'Fira Code', Menlo, monospace; font-size: 12px; color: var(--text-bright); }
@@ -293,7 +318,6 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
   #app:not(.mobile-chat-open) #main { display: none; }
   #mobile-back-btn { display: block; }
   .message { max-width: 90%; }
-  .thinking-group { max-width: 90%; }
   #messages { padding: 16px; gap: 12px; }
   #input-area { padding: 12px 16px; }
   .conversation-item { min-height: 48px; padding: 12px 20px 12px 36px; }
@@ -338,6 +362,15 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
     <button onclick="closePlanDrawer()" title="Close">&times;</button>
   </div>
   <div id="plan-drawer-body"><div class="drawer-md"></div></div>
+</div>
+<div id="mermaid-fullscreen">
+  <div class="mf-header">
+    <button onclick="mermaidZoomFs(1.2)" title="Zoom in">+</button>
+    <button onclick="mermaidZoomFs(0.8)" title="Zoom out">&minus;</button>
+    <button onclick="mermaidZoomFs(0)" title="Reset zoom">1:1</button>
+    <button onclick="closeMermaidFs()" title="Close">&times; Close</button>
+  </div>
+  <div class="mf-body"></div>
 </div>
 <script>
 const API = '';
@@ -440,14 +473,21 @@ function isStaleConv(c) {
   return (Date.now() - new Date(c.lastMessageAt).getTime()) > 5 * 60 * 60 * 1000;
 }
 
+function pendingBadgeHtml(c) {
+  if (c.pendingAction === 'plan_review') return '<span class="pending-badge">Review</span>';
+  if (c.pendingAction === 'question') return '<span class="pending-badge">Question</span>';
+  return '';
+}
+
 function renderConvItem(c, hash) {
   conversationCache[c.id] = c;
-  var status = activityStatus(c.lastMessageAt, c.lastMessageType, c.lastMessageLength);
+  var status = c.pendingAction ? 'waiting' : activityStatus(c.lastMessageAt, c.lastMessageType, c.lastMessageLength);
   var childCount = (c.children && c.children.length) || 0;
-  var stale = isStaleConv(c);
+  var stale = isStaleConv(c) && !c.pendingAction;
   return '<div class="conversation-item' + (stale ? ' stale-conv' : '') + '" data-id="' + c.id + '" onclick="loadConversation(\\'' + c.id + '\\', \\'' + hash + '\\', this)">' +
     '<div class="conv-title"><span class="activity-dot ' + status + '"></span>' +
     '<span>' + esc(c.title) + '</span>' +
+    pendingBadgeHtml(c) +
     (stale ? '<span class="stale-time">' + timeAgo(c.lastMessageAt || c.createdAt) + '</span>' : '') +
     (childCount > 0 ? '<span class="subagent-count"><svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px"><rect x="3" y="5" width="10" height="8" rx="2"/><rect x="5" y="2" width="6" height="4" rx="1"/><circle cx="6.5" cy="9" r="1" fill="var(--bg-elevated)"/><circle cx="9.5" cy="9" r="1" fill="var(--bg-elevated)"/><rect x="1" y="7" width="2" height="3" rx="1"/><rect x="13" y="7" width="2" height="3" rx="1"/></svg> ' + childCount + '</span>' : '') +
     '</div>' +
@@ -463,7 +503,7 @@ async function loadConversationsForWorkspace(hash) {
     const res = await fetch(API + '/api/conversations?workspace=' + hash);
     const data = await res.json();
     if (!data.conversations || data.conversations.length === 0) {
-      el.innerHTML = '<div class="loading" style="padding:8px 32px;font-size:11px;color:var(--text-dim)">No conversations yet</div>';
+      el.innerHTML = '';
       return;
     }
     el.innerHTML = data.conversations.map(c => renderConvItem(c, hash)).join('');
@@ -624,6 +664,7 @@ function isThinkingStep(m) {
   if (m.askQuestion) return false;
   if (m.subagentTask) return false;
   if (m.plan) return false;
+  if (m.toolCall) return false;
   return m.type === 2 && m.text.length < 300 && !/^#/.test(m.text.trim());
 }
 
@@ -687,6 +728,47 @@ function buildPlanHtml(m) {
   return html;
 }
 
+function buildActivityHtml(tools, thinks) {
+  var counts = {};
+  tools.forEach(function(t) {
+    var cat = t.toolCall.tool;
+    counts[cat] = (counts[cat] || 0) + 1;
+  });
+
+  var parts = [];
+  if (counts.read) parts.push('read ' + counts.read);
+  if (counts.edit) parts.push('edited ' + counts.edit);
+  if (counts.terminal) parts.push(counts.terminal + ' cmd' + (counts.terminal > 1 ? 's' : ''));
+  if (counts.search) parts.push(counts.search + ' search' + (counts.search > 1 ? 'es' : ''));
+  if (counts.web) parts.push(counts.web + ' web');
+  if (counts.mcp) parts.push(counts.mcp + ' MCP');
+  if (counts.other) parts.push(counts.other + ' other');
+
+  var total = tools.length + (thinks ? thinks.length : 0);
+  var label = total + ' action' + (total > 1 ? 's' : '');
+
+  var html = '<details class="activity-group">';
+  html += '<summary>';
+  html += '<span class="activity-dot"></span>';
+  html += '<span class="arrow">&#9654;</span> ' + esc(label);
+  if (parts.length > 0) {
+    html += ' <span class="activity-summary">' + esc(parts.join(', ')) + '</span>';
+  }
+  html += '</summary>';
+  html += '<div class="activity-items">';
+  tools.forEach(function(t) {
+    html += '<div class="activity-item act-' + t.toolCall.tool + '" title="' + esc(t.toolCall.detail || '') + '">' + esc(t.toolCall.summary) + '</div>';
+  });
+  if (thinks && thinks.length > 0) {
+    thinks.forEach(function(s) {
+      html += '<div class="activity-item act-think">' + esc(s.text.trim()) + '</div>';
+    });
+  }
+  html += '</div>';
+  html += '</details>';
+  return html;
+}
+
 var planDataStore = {};
 
 function storePlanData(bubbleId, markdown, name) {
@@ -713,6 +795,8 @@ function loadMermaid(cb) {
   document.head.appendChild(s);
 }
 
+var mermaidCounter = 0;
+
 function renderDrawerMarkdown(raw) {
   // Convert markdown to HTML, with special handling for mermaid blocks
   var mermaidBlocks = [];
@@ -722,9 +806,62 @@ function renderDrawerMarkdown(raw) {
   });
   var html = renderMarkdown(src);
   html = html.replace(/%%MERMAID(\\d+)%%/g, function(_, i) {
-    return '<div class="mermaid">' + esc(mermaidBlocks[parseInt(i)]) + '</div>';
+    var wrapId = 'mermaid-wrap-' + (++mermaidCounter);
+    return '<div class="mermaid-wrap" id="' + wrapId + '">' +
+      '<div class="mermaid-controls">' +
+        '<button onclick="mermaidZoom(\\'' + wrapId + '\\', 1.3)" title="Zoom in">+</button>' +
+        '<button onclick="mermaidZoom(\\'' + wrapId + '\\', 0.7)" title="Zoom out">&minus;</button>' +
+        '<button onclick="mermaidZoom(\\'' + wrapId + '\\', 0)" title="Reset">1:1</button>' +
+        '<button onclick="openMermaidFs(\\'' + wrapId + '\\')" title="Fullscreen">&#x26F6;</button>' +
+      '</div>' +
+      '<div class="mermaid-inner"><div class="mermaid">' + esc(mermaidBlocks[parseInt(i)]) + '</div></div>' +
+    '</div>';
   });
   return { html: html, hasMermaid: mermaidBlocks.length > 0 };
+}
+
+// Mermaid zoom/pan in drawer
+var mermaidScales = {};
+
+function mermaidZoom(wrapId, factor) {
+  var inner = document.querySelector('#' + wrapId + ' .mermaid-inner');
+  if (!inner) return;
+  if (factor === 0) { mermaidScales[wrapId] = 1; }
+  else { mermaidScales[wrapId] = (mermaidScales[wrapId] || 1) * factor; }
+  var s = mermaidScales[wrapId];
+  inner.style.transform = 'scale(' + s + ')';
+}
+
+// Mermaid fullscreen
+var mermaidFsScale = 1;
+
+function openMermaidFs(wrapId) {
+  var wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  var svg = wrap.querySelector('svg');
+  if (!svg) return;
+  var fs = document.getElementById('mermaid-fullscreen');
+  var body = fs.querySelector('.mf-body');
+  body.innerHTML = '';
+  body.appendChild(svg.cloneNode(true));
+  mermaidFsScale = 1;
+  fs.classList.add('open');
+}
+
+function closeMermaidFs() {
+  document.getElementById('mermaid-fullscreen').classList.remove('open');
+}
+
+function mermaidZoomFs(factor) {
+  var body = document.querySelector('#mermaid-fullscreen .mf-body');
+  var svg = body.querySelector('svg');
+  if (!svg) return;
+  if (factor === 0) mermaidFsScale = 1;
+  else mermaidFsScale *= factor;
+  svg.style.transform = 'scale(' + mermaidFsScale + ')';
+  svg.style.transformOrigin = 'center center';
+  svg.style.maxWidth = 'none';
+  svg.style.maxHeight = 'none';
 }
 
 function openPlanDrawer(markdown, title) {
@@ -759,7 +896,11 @@ function toggleDrawerFullscreen() {
 }
 
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closePlanDrawer();
+  if (e.key === 'Escape') {
+    var mfs = document.getElementById('mermaid-fullscreen');
+    if (mfs && mfs.classList.contains('open')) { closeMermaidFs(); return; }
+    closePlanDrawer();
+  }
 });
 
 async function submitPlanReview(btn, action) {
@@ -799,8 +940,6 @@ async function submitPlanReview(btn, action) {
     btn.textContent = action === 'approve' ? 'Approve' : 'Reject';
   }
 }
-
-var thinkingCounter = 0;
 
 var OPTION_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
@@ -963,24 +1102,15 @@ function buildMessagesHtml(messages) {
         '<div class="msg-time">' + (m.createdAt ? shortTime(m.createdAt) : '') + '</div>' +
       '</div>';
       i++;
-    } else if (isThinkingStep(m)) {
-      var steps = [];
-      while (i < messages.length && isThinkingStep(messages[i])) {
-        steps.push(messages[i]);
+    } else if (m.toolCall || isThinkingStep(m)) {
+      var tools = [];
+      var thinks = [];
+      while (i < messages.length && (messages[i].toolCall || isThinkingStep(messages[i]))) {
+        if (messages[i].toolCall) tools.push(messages[i]);
+        else thinks.push(messages[i]);
         i++;
       }
-      thinkingCounter++;
-      html += '<details class="thinking-group">' +
-        '<summary>' +
-          '<span class="thinking-dot"></span>' +
-          '<span class="arrow">&#9654;</span> ' + steps.length + ' thinking step' + (steps.length > 1 ? 's' : '') +
-        '</summary>' +
-        '<div class="thinking-steps">' +
-          steps.map(function(s) {
-            return '<div class="thinking-step">' + esc(s.text.trim()) + '</div>';
-          }).join('') +
-        '</div>' +
-      '</details>';
+      html += buildActivityHtml(tools, thinks);
     } else {
       html += '<div class="message assistant">' +
         renderMarkdown(m.text) +
@@ -1196,7 +1326,6 @@ async function toggleTelegram() {
 
 // --- Live sidebar highlighting ---
 var lastSeenAt = {};
-var lastUpdatePoll = Date.now();
 
 function markConversationSeen(convId) {
   var c = conversationCache[convId];
@@ -1204,14 +1333,7 @@ function markConversationSeen(convId) {
 }
 
 async function pollUpdates() {
-  try {
-    var res = await fetch(API + '/api/updates?since=' + lastUpdatePoll);
-    var data = await res.json();
-    if (data.updates && data.updates.length > 0) {
-      refreshOpenWorkspaces();
-    }
-    lastUpdatePoll = data.serverTime || Date.now();
-  } catch {}
+  refreshOpenWorkspaces();
 }
 
 async function refreshOpenWorkspaces() {

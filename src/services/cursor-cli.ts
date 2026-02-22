@@ -6,6 +6,9 @@ export interface ResumeResult {
   output: string;
 }
 
+/** Max time before we log a warning (agent may legitimately run longer). */
+const RESUME_WARN_MS = 5 * 60_000;
+
 export function resumeConversation(
   conversationId: string,
   prompt: string,
@@ -22,20 +25,35 @@ export function resumeConversation(
 
   const child = spawn('cursor', args, {
     stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true,
   });
+
+  // Unref so the child doesn't prevent the server from exiting cleanly,
+  // but we still capture output while the server is alive.
+  child.unref();
 
   let stdout = '';
   let stderr = '';
+  let finished = false;
 
-  child.stdout.on('data', (data: Buffer) => {
+  const warnTimer = setTimeout(() => {
+    if (!finished) {
+      logger.warn(`cursor agent still running after ${RESUME_WARN_MS / 60_000}min (pid=${child.pid})`);
+    }
+  }, RESUME_WARN_MS);
+
+  child.stdout?.on('data', (data: Buffer) => {
     stdout += data.toString();
   });
 
-  child.stderr.on('data', (data: Buffer) => {
+  child.stderr?.on('data', (data: Buffer) => {
     stderr += data.toString();
   });
 
   child.on('close', (code) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(warnTimer);
     if (code !== 0) {
       logger.error(`cursor agent exited with code ${code}: ${stderr || stdout}`);
       onComplete?.({ success: false, output: stderr || stdout });
@@ -46,6 +64,9 @@ export function resumeConversation(
   });
 
   child.on('error', (err) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(warnTimer);
     logger.error(`cursor agent spawn failed: ${String(err)}`);
     onComplete?.({ success: false, output: String(err) });
   });

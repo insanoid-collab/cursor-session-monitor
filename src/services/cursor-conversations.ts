@@ -52,6 +52,7 @@ export interface ConversationSummary {
   parentId: string | null;
   subagentType: string | null;
   children?: ConversationSummary[];
+  pendingAction?: 'plan_review' | 'question' | null;
 }
 
 export interface ChatMessage {
@@ -77,6 +78,11 @@ export interface ChatMessage {
     markdown: string;
     todos: { id: string; content: string; status: string }[];
     reviewStatus: string; // 'Requested' | 'Approved' | 'Rejected'
+  };
+  toolCall?: {
+    tool: string;    // 'read' | 'edit' | 'terminal' | 'search' | 'web' | 'mcp' | 'other'
+    summary: string; // e.g., 'Read index.ts', 'Run npm test'
+    detail?: string; // full path or command
   };
 }
 
@@ -215,6 +221,12 @@ export function listConversations(workspaceHash: string): ConversationSummary[] 
     const lastMsgStmt = db.prepare(
       'SELECT value FROM cursorDiskKV WHERE key >= ? AND key < ? ORDER BY key DESC LIMIT 10',
     );
+    // Targeted scan for pending plan reviews and questions
+    const pendingStmt = db.prepare(
+      `SELECT value FROM cursorDiskKV WHERE key >= ? AND key < ?
+       AND (value LIKE '%"status":"pending"%' OR value LIKE '%"status":"Requested"%')
+       LIMIT 5`,
+    );
 
     const conversations: ConversationSummary[] = [];
     for (const c of composers) {
@@ -259,6 +271,28 @@ export function listConversations(workspaceHash: string): ConversationSummary[] 
         }
       }
 
+      // Detect pending plan reviews and questions (targeted full-conversation scan).
+      // Plan reviews take priority — pending questions are often stale context replays.
+      let hasPendingQuestion = false;
+      let hasPendingPlanReview = false;
+      const pendingRows = pendingStmt.all(prefix, prefixEnd) as { value: string }[];
+      for (const row of pendingRows) {
+        try {
+          const msg = JSON.parse(row.value);
+          const tfd = msg.toolFormerData;
+          if (tfd?.name === 'ask_question' && tfd.additionalData?.status === 'pending') {
+            hasPendingQuestion = true;
+          }
+          if (tfd?.name === 'create_plan' && tfd.additionalData?.reviewData?.status === 'Requested') {
+            hasPendingPlanReview = true;
+          }
+        } catch {
+          continue;
+        }
+      }
+      const pendingAction: ConversationSummary['pendingAction'] =
+        hasPendingPlanReview ? 'plan_review' : hasPendingQuestion ? 'question' : null;
+
       conversations.push({
         id: c.id,
         title,
@@ -270,6 +304,7 @@ export function listConversations(workspaceHash: string): ConversationSummary[] 
         lastMessageLength,
         parentId: c.parentId,
         subagentType: c.subagentType,
+        pendingAction,
       });
     }
 
@@ -438,6 +473,92 @@ function deduplicateMessages(messages: ChatMessage[]): ChatMessage[] {
   return result;
 }
 
+function parseToolCall(tfd: any): ChatMessage['toolCall'] {
+  const name = tfd?.name as string | undefined;
+  if (!name) return undefined;
+
+  let params: Record<string, any> = {};
+  try { params = JSON.parse(tfd.params ?? '{}'); } catch { /* noop */ }
+
+  const bn = (p: string | undefined) => {
+    if (!p) return '?';
+    const parts = p.split('/');
+    return parts[parts.length - 1] || p;
+  };
+  const trunc = (s: string | undefined, n: number) => {
+    if (!s) return '?';
+    return s.length > n ? s.slice(0, n) + '...' : s;
+  };
+
+  switch (name) {
+    case 'read_file_v2':
+    case 'read_file': {
+      const file = params.targetFile || params.filePath || '';
+      return { tool: 'read', summary: `Read ${bn(file)}`, detail: file };
+    }
+    case 'edit_file_v2':
+    case 'search_replace': {
+      const file = params.targetFile || '';
+      return { tool: 'edit', summary: `Edit ${bn(file)}`, detail: file };
+    }
+    case 'write': {
+      const file = params.targetFile || '';
+      return { tool: 'edit', summary: `Write ${bn(file)}`, detail: file };
+    }
+    case 'delete_file': {
+      const file = params.targetFile || '';
+      return { tool: 'edit', summary: `Delete ${bn(file)}`, detail: file };
+    }
+    case 'apply_patch': {
+      const file = params.targetFile || '';
+      return { tool: 'edit', summary: `Patch ${bn(file)}`, detail: file };
+    }
+    case 'run_terminal_command_v2':
+    case 'run_terminal_cmd': {
+      const cmd = params.command || '';
+      return { tool: 'terminal', summary: `Run: ${trunc(cmd, 50)}`, detail: cmd };
+    }
+    case 'ripgrep_raw_search':
+    case 'grep': {
+      const pattern = params.pattern || params.query || '';
+      return { tool: 'search', summary: `Search: ${trunc(pattern, 40)}`, detail: pattern };
+    }
+    case 'codebase_search':
+    case 'semantic_search_full':
+    case 'file_search': {
+      const query = params.query || '';
+      return { tool: 'search', summary: `Search: ${trunc(query, 40)}`, detail: query };
+    }
+    case 'glob_file_search': {
+      const pattern = params.pattern || '';
+      return { tool: 'search', summary: `Find: ${trunc(pattern, 40)}`, detail: pattern };
+    }
+    case 'list_dir_v2':
+    case 'list_dir': {
+      const dir = params.directory || params.path || '.';
+      return { tool: 'read', summary: `List ${bn(dir)}`, detail: dir };
+    }
+    case 'web_search': {
+      const q = params.query || '';
+      return { tool: 'web', summary: `Web: ${trunc(q, 40)}`, detail: q };
+    }
+    case 'web_fetch': {
+      const url = params.url || '';
+      return { tool: 'web', summary: `Fetch: ${trunc(url, 50)}`, detail: url };
+    }
+    case 'read_lints':
+      return { tool: 'read', summary: 'Read lint errors' };
+    case 'todo_write':
+      return { tool: 'edit', summary: 'Update TODOs' };
+    default: {
+      if (name.startsWith('mcp-')) {
+        return { tool: 'mcp', summary: `MCP: ${name.slice(4)}` };
+      }
+      return { tool: 'other', summary: name };
+    }
+  }
+}
+
 export function getConversation(
   conversationId: string,
   limit = 50,
@@ -457,6 +578,8 @@ export function getConversation(
       try {
         const msg = JSON.parse(row.value);
         if (!msg.bubbleId) continue;
+        // Skip context window separators
+        if (msg.capabilityType === 30) continue;
 
         // Build ask_question data if present
         let askQuestion: ChatMessage['askQuestion'];
@@ -519,8 +642,14 @@ export function getConversation(
           } catch { /* malformed params */ }
         }
 
+        // Build tool call data for activity signals
+        let toolCall: ChatMessage['toolCall'];
+        if (tfd && !['ask_question', 'task_v2', 'create_plan'].includes(tfd.name)) {
+          toolCall = parseToolCall(tfd);
+        }
+
         // Allow empty text for special bubble types
-        if ((!msg.text || msg.text.length === 0) && !askQuestion && !subagentTask && !plan) continue;
+        if ((!msg.text || msg.text.length === 0) && !askQuestion && !subagentTask && !plan && !toolCall) continue;
 
         messages.push({
           bubbleId: msg.bubbleId,
@@ -531,6 +660,7 @@ export function getConversation(
           askQuestion,
           subagentTask,
           plan,
+          toolCall,
         });
       } catch {
         continue;
@@ -542,6 +672,23 @@ export function getConversation(
 
     // Deduplicate context-window replays
     messages = deduplicateMessages(messages);
+
+    // Strip intermediate thinking steps when agent is no longer running.
+    // Thinking steps = very short assistant fragments (<80 chars) that are just
+    // status updates like "Analyzing imports...", "Checking file..." etc.
+    // Keep substantive short messages (progress summaries, conclusions).
+    const last = messages[messages.length - 1];
+    const ageMs = last ? Date.now() - new Date(last.createdAt).getTime() : Infinity;
+    const isRunning = last && last.type === 2 && last.text.length < 300 && ageMs < 2 * 60_000;
+    if (!isRunning) {
+      messages = messages.filter(m => {
+        if (m.toolCall || m.askQuestion || m.subagentTask || m.plan) return true;
+        if (m.type !== 2) return true;
+        if (m.text.length >= 80) return true;
+        return false;
+      });
+    }
+
     const totalCount = messages.length;
 
     // If "before" cursor provided, slice messages before that timestamp
