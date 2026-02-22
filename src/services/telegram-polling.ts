@@ -86,10 +86,35 @@ export class TelegramPollingService {
     }
 
     const replyToId = msg.reply_to_message.message_id;
+
+    // Check for conversation-based mapping (needs-input replies)
+    const convInfo = this.messageStore.getConversationInfo(replyToId);
+    if (convInfo) {
+      logger.info(`telegram reply for conversation ${convInfo.conversationId}: ${msg.text.slice(0, 50)}`);
+      await this.sendReply(msg.message_id, '⏳ Running...');
+
+      resumeConversation(convInfo.conversationId, msg.text, convInfo.workspacePath, async (result) => {
+        if (result.success && result.output) {
+          const text = result.output.length > 4000
+            ? result.output.slice(0, 4000) + '…'
+            : result.output;
+          const sent = await this.sendReply(msg!.message_id, `✅ Done\n\n<blockquote expandable>${this.escHtml(text)}</blockquote>`);
+          if (sent?.messageId) {
+            this.messageStore.saveConversationMapping(sent.messageId, convInfo.conversationId, convInfo.workspacePath);
+          }
+          appendToConversation(convInfo.conversationId, msg!.text!, result.output);
+        } else if (!result.success) {
+          await this.sendReply(msg!.message_id, `❌ Failed: ${this.escHtml(result.output.slice(0, 500))}`);
+        }
+      });
+      return;
+    }
+
+    // Fallback: session-based mapping
     const sessionId = this.messageStore.getSessionId(replyToId);
 
     if (!sessionId) {
-      logger.info(`no session mapping for telegram message ${replyToId}`);
+      logger.info(`no mapping for telegram message ${replyToId}`);
       return;
     }
 
@@ -111,7 +136,6 @@ export class TelegramPollingService {
         if (sent?.messageId) {
           this.messageStore.saveMapping(sent.messageId, sessionId);
         }
-        // Inject exchange into Cursor's conversation DB so it appears in the UI
         appendToConversation(sessionId, msg!.text!, result.output);
       } else if (!result.success) {
         await this.sendReply(msg!.message_id, `❌ Failed: ${this.escHtml(result.output.slice(0, 500))}`);

@@ -3,9 +3,11 @@ import { Notifier } from './notifier/telegram-notifier';
 import { TelegramMessageStore } from './telegram-message-store';
 import {
   dangerousCommandTemplate,
+  needsInputTemplate,
   sessionCompleteTemplate,
   SessionSummary,
 } from './templates/notification-templates';
+import type { WaitingConversation } from './cursor-conversations';
 
 export class TelegramNotificationService {
   constructor(
@@ -24,6 +26,22 @@ export class TelegramNotificationService {
     const result = await this.notifier.send(sessionCompleteTemplate(sessionId, summary));
     if (result.messageId && this.messageStore) {
       this.messageStore.saveMapping(result.messageId, sessionId);
+    }
+  }
+
+  async onNeedsInput(conv: WaitingConversation): Promise<void> {
+    if (!this.config.telegram.notifyOn.attentionNeeded) return;
+    const ageMs = Date.now() - new Date(conv.lastMessageAt).getTime();
+    const mins = Math.floor(ageMs / 60000);
+    const timeAgo = mins < 1 ? 'just now' : `${mins}m ago`;
+    const result = await this.notifier.send(needsInputTemplate({
+      workspaceName: conv.workspaceName,
+      title: conv.title,
+      lastMessagePreview: conv.lastMessagePreview,
+      timeAgo,
+    }));
+    if (result.messageId && this.messageStore) {
+      this.messageStore.saveConversationMapping(result.messageId, conv.conversationId, conv.workspacePath);
     }
   }
 }

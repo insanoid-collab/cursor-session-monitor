@@ -45,7 +45,8 @@ CREATE TABLE IF NOT EXISTS session_commands (
 
 CREATE TABLE IF NOT EXISTS telegram_messages (
     telegram_message_id INTEGER PRIMARY KEY,
-    session_id TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (session_id) REFERENCES sessions(session_id)
+    session_id TEXT,
+    conversation_id TEXT,
+    workspace_path TEXT,
+    created_at TEXT NOT NULL
 );

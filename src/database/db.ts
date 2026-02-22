@@ -27,4 +27,10 @@ export function runMigrations(db: Database.Database): void {
   if (!columnExists(db, 'sessions', 'last_response_text')) {
     db.exec('ALTER TABLE sessions ADD COLUMN last_response_text TEXT');
   }
+
+  // Add conversation-based Telegram mappings
+  if (!columnExists(db, 'telegram_messages', 'conversation_id')) {
+    db.exec('ALTER TABLE telegram_messages ADD COLUMN conversation_id TEXT');
+    db.exec('ALTER TABLE telegram_messages ADD COLUMN workspace_path TEXT');
+  }
 }

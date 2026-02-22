@@ -2,10 +2,27 @@ import { FastifyInstance } from 'fastify';
 import { CursorAdapter } from '../adapters/cursor-adapter';
 import { SessionManager } from '../services/session-manager';
 import { TelegramNotificationService } from '../services/telegram-notification-service';
-import { listWorkspaces, listConversations, getConversation } from '../services/cursor-conversations';
+import { listWorkspaces, listConversations, getConversation, getWaitingConversations } from '../services/cursor-conversations';
+import { logger } from '../utils/logger';
 import { appendToConversation } from '../services/cursor-memory';
 import { resumeConversation } from '../services/cursor-cli';
 import { chatPageHtml } from './chat-page';
+
+// Runtime state: Telegram notifications off by default
+let telegramEnabled = false;
+
+// Track recently-updated sessions from hooks (sessionId → timestamp)
+const recentUpdates = new Map<string, number>();
+const UPDATE_TTL_MS = 60_000;
+
+function recordUpdate(sessionId: string): void {
+  recentUpdates.set(sessionId, Date.now());
+  // Prune old entries
+  const cutoff = Date.now() - UPDATE_TTL_MS;
+  for (const [id, ts] of recentUpdates) {
+    if (ts < cutoff) recentUpdates.delete(id);
+  }
+}
 
 export async function registerRoutes(
   app: FastifyInstance,
@@ -19,13 +36,15 @@ export async function registerRoutes(
   app.post('/hooks/cursor/afterFileEdit', async (req, reply) => {
     const event = cursorAdapter.parseEvent(req.body);
     const result = sessionManager.ingest(event);
+    recordUpdate(event.sessionId);
     reply.send({ status: 'ok', sessionId: event.sessionId, ...result });
   });
 
   app.post('/hooks/cursor/beforeShellExecution', async (req, reply) => {
     const event = cursorAdapter.parseEvent(req.body);
     const result = sessionManager.ingest(event);
-    if (result.flagged) {
+    recordUpdate(event.sessionId);
+    if (result.flagged && telegramEnabled) {
       await notifications?.onDangerousCommand(
         event.sessionId,
         String(event.metadata.command ?? ''),
@@ -38,14 +57,16 @@ export async function registerRoutes(
   app.post('/hooks/cursor/afterAgentResponse', async (req, reply) => {
     const event = cursorAdapter.parseEvent(req.body);
     const result = sessionManager.ingest(event);
+    recordUpdate(event.sessionId);
     reply.send({ status: 'ok', sessionId: event.sessionId, ...result });
   });
 
   app.post('/hooks/cursor/stop', async (req, reply) => {
     const event = cursorAdapter.parseEvent(req.body);
     sessionManager.ingest(event);
+    recordUpdate(event.sessionId);
     const summary = sessionManager.getSummary(event.sessionId);
-    if (summary && notifications) {
+    if (summary && notifications && telegramEnabled) {
       await notifications.onSessionComplete(event.sessionId, summary);
     }
     reply.send({ status: 'ok', sessionId: event.sessionId, summary });
@@ -71,6 +92,32 @@ export async function registerRoutes(
       return;
     }
     reply.send(session);
+  });
+
+  // --- Settings API ---
+
+  app.get('/api/settings', async () => ({
+    telegramEnabled,
+  }));
+
+  app.post('/api/settings', async (req) => {
+    const body = req.body as { telegramEnabled?: boolean };
+    if (typeof body.telegramEnabled === 'boolean') {
+      telegramEnabled = body.telegramEnabled;
+    }
+    return { telegramEnabled };
+  });
+
+  // --- Updates API (for live sidebar highlighting) ---
+
+  app.get('/api/updates', async (req) => {
+    const { since } = req.query as { since?: string };
+    const sinceTs = since ? Number(since) : 0;
+    const updates: { sessionId: string; timestamp: number }[] = [];
+    for (const [sessionId, ts] of recentUpdates) {
+      if (ts > sinceTs) updates.push({ sessionId, timestamp: ts });
+    }
+    return { updates, serverTime: Date.now() };
   });
 
   // --- Cursor Chat Web UI ---
@@ -106,21 +153,45 @@ export async function registerRoutes(
       return;
     }
 
-    // Find workspace path for the CLI
     let workspacePath: string | null = null;
     if (workspaceHash) {
       const ws = listWorkspaces().find(w => w.hash === workspaceHash);
       if (ws) workspacePath = ws.folder;
     }
 
-    // Inject prompt into conversation and kick off agent
     appendToConversation(id, text, '(processing...)');
 
     resumeConversation(id, text, workspacePath, (result) => {
-      // Replace placeholder with actual response
       appendToConversation(id, text, result.output || '(no response)');
     });
 
     reply.send({ status: 'queued' });
   });
+
+  // --- Periodic scan for "needs input" conversations ---
+  const notifiedWaiting = new Set<string>();
+
+  setInterval(async () => {
+    if (!telegramEnabled || !notifications) return;
+    try {
+      const waiting = getWaitingConversations();
+      const currentIds = new Set(waiting.map(w => w.conversationId));
+
+      // Clear stale entries (conversation no longer waiting)
+      for (const id of notifiedWaiting) {
+        if (!currentIds.has(id)) notifiedWaiting.delete(id);
+      }
+
+      // Notify new ones
+      for (const conv of waiting) {
+        if (!notifiedWaiting.has(conv.conversationId)) {
+          await notifications.onNeedsInput(conv);
+          notifiedWaiting.add(conv.conversationId);
+          logger.info(`sent needs-input notification for ${conv.workspaceName}/${conv.title.slice(0, 30)}`);
+        }
+      }
+    } catch (err) {
+      logger.error(`needs-input scan failed: ${String(err)}`);
+    }
+  }, 30_000);
 }

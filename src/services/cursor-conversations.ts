@@ -121,6 +121,10 @@ export function listWorkspaces(onlyOpen = false): Workspace[] {
   const openFolders = getOpenFolders();
   const entries = fs.readdirSync(WORKSPACE_STORAGE, { withFileTypes: true });
   const workspaces: Workspace[] = [];
+  const globalDb = openReadonly(GLOBAL_STATE_DB);
+  const hasMessagesStmt = globalDb?.prepare(
+    'SELECT 1 FROM cursorDiskKV WHERE key >= ? AND key < ? LIMIT 1',
+  );
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
@@ -137,19 +141,35 @@ export function listWorkspaces(onlyOpen = false): Workspace[] {
       if (onlyOpen && !isOpen) continue;
 
       const composers = getComposerIds(entry.name);
-      if (composers.length === 0) continue;
+
+      // Count only conversations that have at least one message
+      let withMessages = 0;
+      if (composers.length > 0 && hasMessagesStmt) {
+        for (const c of composers) {
+          const prefix = `bubbleId:${c.id}:`;
+          const row = hasMessagesStmt.get(prefix, prefix + '\xff');
+          if (row) withMessages++;
+        }
+      } else {
+        withMessages = composers.length;
+      }
+
+      // Still show open workspaces even with 0 conversations
+      if (withMessages === 0 && !isOpen) continue;
 
       workspaces.push({
         hash: entry.name,
         folder,
         name: shortName(folder),
-        conversationCount: composers.length,
+        conversationCount: withMessages,
         isOpen,
       });
     } catch {
       continue;
     }
   }
+
+  globalDb?.close();
 
   // Open workspaces first, then alphabetical
   return workspaces.sort((a, b) => {
@@ -322,4 +342,82 @@ export function getConversation(
   } finally {
     db.close();
   }
+}
+
+export interface WaitingConversation {
+  conversationId: string;
+  workspaceHash: string;
+  workspaceName: string;
+  workspacePath: string;
+  title: string;
+  lastMessageAt: string;
+  lastMessagePreview: string;
+}
+
+export function getWaitingConversations(): WaitingConversation[] {
+  const workspaces = listWorkspaces(true);
+  const results: WaitingConversation[] = [];
+
+  const db = openReadonly(GLOBAL_STATE_DB);
+  if (!db) return results;
+
+  try {
+    const allMsgStmt = db.prepare(
+      'SELECT value FROM cursorDiskKV WHERE key >= ? AND key < ?',
+    );
+
+    for (const ws of workspaces) {
+      const conversations = listConversations(ws.hash);
+      for (const conv of conversations) {
+        if (conv.parentId) continue; // only root conversations
+        if (!conv.lastMessageAt) continue;
+
+        const ageMs = Date.now() - new Date(conv.lastMessageAt).getTime();
+        if (ageMs > 60 * 60 * 1000) continue; // within 60 minutes
+
+        // Find the actual last message by parsing all and sorting by createdAt
+        const prefix = `bubbleId:${conv.id}:`;
+        const rows = allMsgStmt.all(prefix, prefix + '\xff') as { value: string }[];
+
+        let lastAssistant: { text: string; createdAt: string } | null = null;
+        let latestCreatedAt = '';
+        let latestType = 0;
+
+        for (const row of rows) {
+          try {
+            const msg = JSON.parse(row.value);
+            if (!msg.createdAt) continue;
+            if (msg.createdAt > latestCreatedAt) {
+              latestCreatedAt = msg.createdAt;
+              latestType = msg.type ?? 0;
+            }
+            if (msg.type === 2 && msg.text && msg.text.length > 0) {
+              if (!lastAssistant || msg.createdAt > lastAssistant.createdAt) {
+                lastAssistant = { text: msg.text, createdAt: msg.createdAt };
+              }
+            }
+          } catch { continue; }
+        }
+
+        // The latest message must be from the assistant (type 2)
+        if (latestType !== 2) continue;
+        // Must have a substantial assistant response (not just a thinking step)
+        if (!lastAssistant || lastAssistant.text.length < 200) continue;
+
+        results.push({
+          conversationId: conv.id,
+          workspaceHash: ws.hash,
+          workspaceName: ws.name,
+          workspacePath: ws.folder,
+          title: conv.title,
+          lastMessageAt: conv.lastMessageAt,
+          lastMessagePreview: lastAssistant.text.slice(0, 500),
+        });
+      }
+    }
+  } finally {
+    db.close();
+  }
+
+  return results;
 }

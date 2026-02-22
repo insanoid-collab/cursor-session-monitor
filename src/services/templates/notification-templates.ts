@@ -71,3 +71,27 @@ export function sessionCompleteTemplate(sessionId: string, summary: SessionSumma
 
   return lines.join('\n');
 }
+
+export function needsInputTemplate(conv: {
+  workspaceName: string;
+  title: string;
+  lastMessagePreview: string;
+  timeAgo: string;
+}): string {
+  const lines: string[] = [
+    `🟠 <b>Needs Input</b>`,
+    ``,
+    `Project: <b>${esc(conv.workspaceName)}</b>`,
+    `Chat: "${esc(conv.title.slice(0, 60))}"`,
+    `${conv.timeAgo}`,
+  ];
+
+  if (conv.lastMessagePreview) {
+    lines.push('');
+    lines.push(`<blockquote expandable>${esc(conv.lastMessagePreview)}</blockquote>`);
+  }
+
+  lines.push('');
+  lines.push('<i>Reply to this message to respond.</i>');
+  return lines.join('\n');
+}
