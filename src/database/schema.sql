@@ -48,5 +48,7 @@ CREATE TABLE IF NOT EXISTS telegram_messages (
     session_id TEXT,
     conversation_id TEXT,
     workspace_path TEXT,
+    bubble_id TEXT,
+    questions_json TEXT,
     created_at TEXT NOT NULL
 );

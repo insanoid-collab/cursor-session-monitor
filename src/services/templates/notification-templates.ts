@@ -72,12 +72,17 @@ export function sessionCompleteTemplate(sessionId: string, summary: SessionSumma
   return lines.join('\n');
 }
 
-export function needsInputTemplate(conv: {
+const OPTION_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+export interface NeedsInputData {
   workspaceName: string;
   title: string;
   lastMessagePreview: string;
   timeAgo: string;
-}): string {
+  questions?: { id: string; prompt: string; options: { id: string; label: string }[] }[];
+}
+
+export function needsInputTemplate(conv: NeedsInputData): string {
   const lines: string[] = [
     `🟠 <b>Needs Input</b>`,
     ``,
@@ -86,12 +91,29 @@ export function needsInputTemplate(conv: {
     `${conv.timeAgo}`,
   ];
 
-  if (conv.lastMessagePreview) {
+  if (conv.questions && conv.questions.length > 0) {
+    lines.push('');
+    for (let qi = 0; qi < conv.questions.length; qi++) {
+      const q = conv.questions[qi];
+      lines.push(`<b>${qi + 1}.</b> ${esc(q.prompt)}`);
+      for (let oi = 0; oi < q.options.length; oi++) {
+        const letter = OPTION_LETTERS[oi] ?? String(oi);
+        lines.push(`  <b>${letter}</b>  ${esc(q.options[oi].label)}`);
+      }
+      if (qi < conv.questions.length - 1) lines.push('');
+    }
+    lines.push('');
+    if (conv.questions.length === 1) {
+      lines.push('<i>Reply with a letter (A, B, ...) or type your own answer.</i>');
+    } else {
+      lines.push('<i>Reply with letters for each question (e.g. "A B") or type your own answer.</i>');
+    }
+  } else if (conv.lastMessagePreview) {
     lines.push('');
     lines.push(`<blockquote expandable>${esc(conv.lastMessagePreview)}</blockquote>`);
+    lines.push('');
+    lines.push('<i>Reply to this message to respond.</i>');
   }
 
-  lines.push('');
-  lines.push('<i>Reply to this message to respond.</i>');
   return lines.join('\n');
 }

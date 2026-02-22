@@ -65,6 +65,84 @@ function createBubble(type: 1 | 2, text: string): MinimalBubble {
   };
 }
 
+export interface QuestionAnswer {
+  questionId: string;
+  selectedOptionId: string;
+}
+
+/**
+ * Write structured answers back to a pending ask_question bubble in Cursor's DB.
+ * This mimics what the Cursor GUI does when the user clicks option buttons.
+ */
+export function submitQuestionAnswer(
+  conversationId: string,
+  bubbleId: string,
+  answers: QuestionAnswer[],
+): boolean {
+  if (!fs.existsSync(GLOBAL_STATE_DB)) {
+    logger.warn(`cursor state db not found: ${GLOBAL_STATE_DB}`);
+    return false;
+  }
+
+  let db: Database.Database | null = null;
+  try {
+    db = new Database(GLOBAL_STATE_DB);
+    const key = `bubbleId:${conversationId}:${bubbleId}`;
+    const row = db
+      .prepare('SELECT value FROM cursorDiskKV WHERE key = ?')
+      .get(key) as { value: string } | undefined;
+
+    if (!row) {
+      logger.warn(`ask_question bubble not found: ${key}`);
+      return false;
+    }
+
+    const bubble = JSON.parse(row.value);
+    const tfd = bubble.toolFormerData;
+    if (!tfd || tfd.name !== 'ask_question') {
+      logger.warn(`bubble ${key} is not an ask_question`);
+      return false;
+    }
+
+    // Build currentSelections: { [questionId]: [selectedOptionId] }
+    const currentSelections: Record<string, string[]> = {};
+    const freeformTexts: Record<string, string> = {};
+    for (const a of answers) {
+      currentSelections[a.questionId] = [a.selectedOptionId];
+      freeformTexts[a.questionId] = '';
+    }
+
+    // Update additionalData
+    tfd.additionalData = {
+      ...tfd.additionalData,
+      status: 'submitted',
+      currentSelections,
+      freeformTexts,
+    };
+
+    // Build result
+    tfd.result = JSON.stringify({
+      answers: answers.map(a => ({
+        questionId: a.questionId,
+        selectedOptionIds: [a.selectedOptionId],
+      })),
+    });
+
+    tfd.userDecision = 'accepted';
+
+    db.prepare('INSERT OR REPLACE INTO cursorDiskKV (key, value) VALUES (?, ?)')
+      .run(key, JSON.stringify(bubble));
+
+    logger.info(`submitted answers for ask_question bubble ${bubbleId} in conversation ${conversationId}`);
+    return true;
+  } catch (err) {
+    logger.error(`failed to submit question answer: ${String(err)}`);
+    return false;
+  } finally {
+    db?.close();
+  }
+}
+
 export function appendToConversation(
   conversationId: string,
   prompt: string,

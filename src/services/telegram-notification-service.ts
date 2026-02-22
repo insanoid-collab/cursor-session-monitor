@@ -39,9 +39,16 @@ export class TelegramNotificationService {
       title: conv.title,
       lastMessagePreview: conv.lastMessagePreview,
       timeAgo,
+      questions: conv.questions.length > 0 ? conv.questions : undefined,
     }));
     if (result.messageId && this.messageStore) {
-      this.messageStore.saveConversationMapping(result.messageId, conv.conversationId, conv.workspacePath);
+      this.messageStore.saveConversationMapping(
+        result.messageId,
+        conv.conversationId,
+        conv.workspacePath,
+        conv.bubbleId,
+        conv.questions.length > 0 ? conv.questions : undefined,
+      );
     }
   }
 }

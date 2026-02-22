@@ -60,6 +60,11 @@ export interface ChatMessage {
   text: string;
   createdAt: string;
   isAgentic: boolean;
+  askQuestion?: {
+    status: string;
+    questions: PendingQuestion[];
+    answers?: { questionId: string; selectedOptionIds: string[] }[];
+  };
 }
 
 function shortName(folder: string): string {
@@ -306,13 +311,43 @@ export function getConversation(
       try {
         const msg = JSON.parse(row.value);
         if (!msg.bubbleId) continue;
-        if (!msg.text || msg.text.length === 0) continue;
+
+        // Build ask_question data if present
+        let askQuestion: ChatMessage['askQuestion'];
+        const tfd = msg.toolFormerData;
+        if (tfd?.name === 'ask_question') {
+          try {
+            const params = JSON.parse(tfd.params ?? '{}');
+            const questions: PendingQuestion[] = (params.questions ?? []).map((q: any) => ({
+              id: q.id ?? '',
+              prompt: q.prompt ?? '',
+              options: (q.options ?? []).map((o: any) => ({ id: o.id ?? '', label: o.label ?? '' })),
+            }));
+            let answers: { questionId: string; selectedOptionIds: string[] }[] | undefined;
+            if (tfd.result) {
+              try {
+                const r = JSON.parse(tfd.result);
+                answers = r.answers;
+              } catch { /* ignore */ }
+            }
+            askQuestion = {
+              status: tfd.additionalData?.status ?? 'unknown',
+              questions,
+              answers,
+            };
+          } catch { /* malformed params */ }
+        }
+
+        // Allow empty text for ask_question bubbles (text is always empty for them)
+        if ((!msg.text || msg.text.length === 0) && !askQuestion) continue;
+
         messages.push({
           bubbleId: msg.bubbleId,
           type: msg.type ?? 0,
           text: msg.text ?? '',
           createdAt: msg.createdAt ?? '',
           isAgentic: msg.isAgentic ?? false,
+          askQuestion,
         });
       } catch {
         continue;
@@ -344,6 +379,12 @@ export function getConversation(
   }
 }
 
+export interface PendingQuestion {
+  id: string;
+  prompt: string;
+  options: { id: string; label: string }[];
+}
+
 export interface WaitingConversation {
   conversationId: string;
   workspaceHash: string;
@@ -352,6 +393,8 @@ export interface WaitingConversation {
   title: string;
   lastMessageAt: string;
   lastMessagePreview: string;
+  bubbleId: string | null;
+  questions: PendingQuestion[];
 }
 
 export function getWaitingConversations(): WaitingConversation[] {
@@ -363,21 +406,27 @@ export function getWaitingConversations(): WaitingConversation[] {
 
   try {
     const allMsgStmt = db.prepare(
-      'SELECT value FROM cursorDiskKV WHERE key >= ? AND key < ?',
+      'SELECT key, value FROM cursorDiskKV WHERE key >= ? AND key < ?',
     );
 
     for (const ws of workspaces) {
       const conversations = listConversations(ws.hash);
       for (const conv of conversations) {
-        if (conv.parentId) continue; // only root conversations
+        if (conv.parentId) continue;
         if (!conv.lastMessageAt) continue;
 
         const ageMs = Date.now() - new Date(conv.lastMessageAt).getTime();
-        if (ageMs > 60 * 60 * 1000) continue; // within 60 minutes
+        if (ageMs > 60 * 60 * 1000) continue;
 
-        // Find the actual last message by parsing all and sorting by createdAt
         const prefix = `bubbleId:${conv.id}:`;
-        const rows = allMsgStmt.all(prefix, prefix + '\xff') as { value: string }[];
+        const rows = allMsgStmt.all(prefix, prefix + '\xff') as { key: string; value: string }[];
+
+        // Look for pending ask_question bubbles
+        let pendingQuestion: {
+          bubbleId: string;
+          questions: PendingQuestion[];
+          createdAt: string;
+        } | null = null;
 
         let lastAssistant: { text: string; createdAt: string } | null = null;
         let latestCreatedAt = '';
@@ -387,10 +436,35 @@ export function getWaitingConversations(): WaitingConversation[] {
           try {
             const msg = JSON.parse(row.value);
             if (!msg.createdAt) continue;
+
             if (msg.createdAt > latestCreatedAt) {
               latestCreatedAt = msg.createdAt;
               latestType = msg.type ?? 0;
             }
+
+            // Check for pending ask_question tool
+            const tfd = msg.toolFormerData;
+            if (tfd?.name === 'ask_question' && tfd.additionalData?.status === 'pending') {
+              try {
+                const params = JSON.parse(tfd.params);
+                const questions: PendingQuestion[] = (params.questions ?? []).map((q: any) => ({
+                  id: q.id ?? '',
+                  prompt: q.prompt ?? '',
+                  options: (q.options ?? []).map((o: any) => ({
+                    id: o.id ?? '',
+                    label: o.label ?? '',
+                  })),
+                }));
+                if (questions.length > 0) {
+                  pendingQuestion = {
+                    bubbleId: msg.bubbleId,
+                    questions,
+                    createdAt: msg.createdAt,
+                  };
+                }
+              } catch { /* malformed params */ }
+            }
+
             if (msg.type === 2 && msg.text && msg.text.length > 0) {
               if (!lastAssistant || msg.createdAt > lastAssistant.createdAt) {
                 lastAssistant = { text: msg.text, createdAt: msg.createdAt };
@@ -399,9 +473,26 @@ export function getWaitingConversations(): WaitingConversation[] {
           } catch { continue; }
         }
 
-        // The latest message must be from the assistant (type 2)
+        // Prefer pending ask_question detection
+        if (pendingQuestion) {
+          results.push({
+            conversationId: conv.id,
+            workspaceHash: ws.hash,
+            workspaceName: ws.name,
+            workspacePath: ws.folder,
+            title: conv.title,
+            lastMessageAt: pendingQuestion.createdAt,
+            lastMessagePreview: pendingQuestion.questions
+              .map((q, i) => `${i + 1}. ${q.prompt}`)
+              .join('\n'),
+            bubbleId: pendingQuestion.bubbleId,
+            questions: pendingQuestion.questions,
+          });
+          continue;
+        }
+
+        // Fallback: general "waiting" heuristic
         if (latestType !== 2) continue;
-        // Must have a substantial assistant response (not just a thinking step)
         if (!lastAssistant || lastAssistant.text.length < 200) continue;
 
         results.push({
@@ -412,6 +503,8 @@ export function getWaitingConversations(): WaitingConversation[] {
           title: conv.title,
           lastMessageAt: conv.lastMessageAt,
           lastMessagePreview: lastAssistant.text.slice(0, 500),
+          bubbleId: null,
+          questions: [],
         });
       }
     }

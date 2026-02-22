@@ -139,6 +139,20 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .thinking-steps { padding: 0; margin: 0; background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); overflow: hidden; }
 .thinking-step { padding: 8px 16px 8px 34px; font-size: 12px; color: var(--text-dim); white-space: pre-wrap; word-wrap: break-word; position: relative; border-top: 1px solid var(--border); line-height: 1.5; }
 .thinking-step::before { content: ''; position: absolute; left: 16px; top: 14px; width: 5px; height: 5px; border-radius: 50%; background: var(--text-dim); opacity: 0.3; }
+.question-card { align-self: flex-start; max-width: 75%; margin: 6px 0; background: var(--surface); border: 1px solid var(--orange); border-left: 3px solid var(--orange); border-radius: var(--radius-sm); padding: 12px 16px; }
+.question-card.answered { border-color: var(--green); border-left-color: var(--green); opacity: 0.7; }
+.question-card-header { font-size: 11px; color: var(--orange); font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.question-card.answered .question-card-header { color: var(--green); }
+.question-item { margin-bottom: 10px; }
+.question-item:last-child { margin-bottom: 0; }
+.question-prompt { font-size: 13px; color: var(--text-bright); font-weight: 500; margin-bottom: 6px; }
+.question-options { display: flex; flex-direction: column; gap: 4px; }
+.question-option { display: flex; align-items: flex-start; gap: 8px; padding: 5px 10px; border-radius: var(--radius-xs); background: var(--bg); font-size: 12px; color: var(--text); transition: background var(--transition); }
+.question-option:hover { background: var(--surface-hover); }
+.question-option.selected { background: var(--green-dim); border: 1px solid var(--green); }
+.option-letter { font-weight: 600; color: var(--accent); min-width: 16px; flex-shrink: 0; }
+.question-option.selected .option-letter { color: var(--green); }
+.question-card .msg-time { margin-top: 8px; }
 
 /* Code & markdown */
 .message code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-family: 'SF Mono', 'Fira Code', Menlo, monospace; font-size: 12px; color: var(--text-bright); }
@@ -535,17 +549,57 @@ async function loadEarlierMessages() {
 }
 
 function isThinkingStep(m) {
+  if (m.askQuestion) return false;
   return m.type === 2 && m.text.length < 300 && !/^#/.test(m.text.trim());
 }
 
 var thinkingCounter = 0;
+
+var OPTION_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+function buildQuestionHtml(m) {
+  var aq = m.askQuestion;
+  var isAnswered = aq.status === 'submitted';
+  var answerMap = {};
+  if (aq.answers) {
+    aq.answers.forEach(function(a) {
+      (a.selectedOptionIds || []).forEach(function(oid) { answerMap[a.questionId + ':' + oid] = true; });
+    });
+  }
+
+  var cls = 'question-card' + (isAnswered ? ' answered' : '');
+  var html = '<div class="' + cls + '">';
+  html += '<div class="question-card-header">' + (isAnswered ? '&#10003; Answered' : '&#9679; Questions') + '</div>';
+
+  aq.questions.forEach(function(q, qi) {
+    html += '<div class="question-item">';
+    html += '<div class="question-prompt">' + (qi + 1) + '. ' + esc(q.prompt) + '</div>';
+    html += '<div class="question-options">';
+    q.options.forEach(function(opt, oi) {
+      var letter = OPTION_LETTERS[oi] || String(oi);
+      var sel = answerMap[q.id + ':' + opt.id] ? ' selected' : '';
+      html += '<div class="question-option' + sel + '">';
+      html += '<span class="option-letter">' + letter + '</span>';
+      html += '<span>' + esc(opt.label) + '</span>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+  });
+
+  html += '<div class="msg-time">' + (m.createdAt ? shortTime(m.createdAt) : '') + '</div>';
+  html += '</div>';
+  return html;
+}
 
 function buildMessagesHtml(messages) {
   var html = '';
   var i = 0;
   while (i < messages.length) {
     var m = messages[i];
-    if (m.type === 1) {
+    if (m.askQuestion && m.askQuestion.questions && m.askQuestion.questions.length > 0) {
+      html += buildQuestionHtml(m);
+      i++;
+    } else if (m.type === 1) {
       html += '<div class="message user">' +
         renderMarkdown(m.text) +
         '<div class="msg-time">' + (m.createdAt ? shortTime(m.createdAt) : '') + '</div>' +

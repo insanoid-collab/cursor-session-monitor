@@ -33,4 +33,10 @@ export function runMigrations(db: Database.Database): void {
     db.exec('ALTER TABLE telegram_messages ADD COLUMN conversation_id TEXT');
     db.exec('ALTER TABLE telegram_messages ADD COLUMN workspace_path TEXT');
   }
+
+  // Add question data columns for ask_question support
+  if (!columnExists(db, 'telegram_messages', 'bubble_id')) {
+    db.exec('ALTER TABLE telegram_messages ADD COLUMN bubble_id TEXT');
+    db.exec('ALTER TABLE telegram_messages ADD COLUMN questions_json TEXT');
+  }
 }
