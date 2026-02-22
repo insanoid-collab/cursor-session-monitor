@@ -233,8 +233,10 @@ export function appendToConversation(
     const userBubble = createBubble(1, `[via Telegram] ${prompt}`);
     const userKey = `bubbleId:${conversationId}:${userBubble.bubbleId}`;
 
-    // Create assistant bubble (the agent response)
+    // Create assistant bubble (the agent response) — offset timestamp by 1ms
+    // so it always sorts after the user bubble in the conversation view.
     const assistantBubble = createBubble(2, response);
+    assistantBubble.createdAt = new Date(Date.now() + 1).toISOString();
     const assistantKey = `bubbleId:${conversationId}:${assistantBubble.bubbleId}`;
 
     const insert = db.prepare(

@@ -99,6 +99,9 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .subagent-count { font-size: 10px; font-weight: 500; color: var(--accent); background: var(--accent-glow); padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; margin-left: auto; }
 .subagent-badge { font-size: 10px; color: var(--accent); background: var(--accent-glow); padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; }
 .pending-badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; background: var(--orange-dim); color: var(--orange); animation: pulse 2s ease-in-out infinite; }
+.agent-badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; background: var(--green-dim); color: var(--green); animation: pulse 2s ease-in-out infinite; }
+.agent-running-indicator { align-self: flex-start; display: flex; align-items: center; gap: 8px; padding: 8px 16px; color: var(--green); font-size: 12px; font-weight: 500; }
+.agent-running-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.5s ease-in-out infinite; }
 
 /* Sub-agent tabs */
 #agent-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 20px; overflow-x: auto; min-height: 0; background: var(--bg-elevated); }
@@ -383,6 +386,7 @@ let oldestTimestamp = null;
 let hasMoreMessages = false;
 let loadingMore = false;
 let lastMessageCount = 0;
+let lastAgentRunning = false;
 
 function isMobile() { return window.innerWidth <= 768; }
 
@@ -481,13 +485,14 @@ function pendingBadgeHtml(c) {
 
 function renderConvItem(c, hash) {
   conversationCache[c.id] = c;
-  var status = c.pendingAction ? 'waiting' : activityStatus(c.lastMessageAt, c.lastMessageType, c.lastMessageLength);
+  var status = c.agentRunning ? 'running' : c.pendingAction ? 'waiting' : activityStatus(c.lastMessageAt, c.lastMessageType, c.lastMessageLength);
   var childCount = (c.children && c.children.length) || 0;
-  var stale = isStaleConv(c) && !c.pendingAction;
+  var stale = isStaleConv(c) && !c.pendingAction && !c.agentRunning;
+  var badge = c.agentRunning ? '<span class="agent-badge">Running</span>' : pendingBadgeHtml(c);
   return '<div class="conversation-item' + (stale ? ' stale-conv' : '') + '" data-id="' + c.id + '" onclick="loadConversation(\\'' + c.id + '\\', \\'' + hash + '\\', this)">' +
     '<div class="conv-title"><span class="activity-dot ' + status + '"></span>' +
     '<span>' + esc(c.title) + '</span>' +
-    pendingBadgeHtml(c) +
+    badge +
     (stale ? '<span class="stale-time">' + timeAgo(c.lastMessageAt || c.createdAt) + '</span>' : '') +
     (childCount > 0 ? '<span class="subagent-count"><svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px"><rect x="3" y="5" width="10" height="8" rx="2"/><rect x="5" y="2" width="6" height="4" rx="1"/><circle cx="6.5" cy="9" r="1" fill="var(--bg-elevated)"/><circle cx="9.5" cy="9" r="1" fill="var(--bg-elevated)"/><rect x="1" y="7" width="2" height="3" rx="1"/><rect x="13" y="7" width="2" height="3" rx="1"/></svg> ' + childCount + '</span>' : '') +
     '</div>' +
@@ -583,7 +588,8 @@ async function switchToAgent(id) {
     hasMoreMessages = data.hasMore;
     oldestTimestamp = data.oldestTimestamp;
     lastMessageCount = data.totalCount;
-    renderMessages(data.messages || [], true);
+    lastAgentRunning = data.agentRunning || false;
+    renderMessages(data.messages || [], true, data.agentRunning);
   } catch (e) {
     msgs.innerHTML = '<div class="loading">Failed to load conversation</div>';
   }
@@ -619,7 +625,8 @@ async function loadConversation(id, wsHash, el) {
     hasMoreMessages = data.hasMore;
     oldestTimestamp = data.oldestTimestamp;
     lastMessageCount = data.totalCount;
-    renderMessages(data.messages || [], true);
+    lastAgentRunning = data.agentRunning || false;
+    renderMessages(data.messages || [], true, data.agentRunning);
   } catch (e) {
     msgs.innerHTML = '<div class="loading">Failed to load conversation</div>';
   }
@@ -1122,28 +1129,31 @@ function buildMessagesHtml(messages) {
   return html;
 }
 
-function updateRunningState(messages) {
+function updateRunningState(messages, agentRunning) {
   var inputArea = document.getElementById('input-area');
   if (!messages || messages.length === 0) { inputArea.classList.remove('is-running'); return; }
   var last = messages[messages.length - 1];
   var status = activityStatus(last.createdAt, last.type, (last.text || '').length);
-  if (status === 'running') {
+  if (status === 'running' || agentRunning) {
     inputArea.classList.add('is-running');
   } else {
     inputArea.classList.remove('is-running');
   }
 }
 
-function renderMessages(messages, scrollToBottom) {
+function renderMessages(messages, scrollToBottom, agentRunning) {
   const msgs = document.getElementById('messages');
   let html = '';
   if (hasMoreMessages) {
     html += '<button id="load-more-btn" onclick="loadEarlierMessages()" class="load-more-btn">Load earlier messages</button>';
   }
   html += buildMessagesHtml(messages);
+  if (agentRunning) {
+    html += '<div class="agent-running-indicator"><span class="agent-running-dot"></span> Agent running...</div>';
+  }
   msgs.innerHTML = html;
   if (scrollToBottom) msgs.scrollTop = msgs.scrollHeight;
-  updateRunningState(messages);
+  updateRunningState(messages, agentRunning);
 }
 
 async function refreshMessages() {
@@ -1151,14 +1161,15 @@ async function refreshMessages() {
   try {
     const res = await fetch(API + '/api/conversations/' + activeConvId + '?limit=50');
     const data = await res.json();
-    updateRunningState(data.messages || []);
-    if (!loadingMore && data.totalCount !== lastMessageCount) {
+    updateRunningState(data.messages || [], data.agentRunning);
+    if (!loadingMore && data.totalCount !== lastMessageCount || data.agentRunning !== lastAgentRunning) {
+      lastAgentRunning = data.agentRunning;
       lastMessageCount = data.totalCount;
       hasMoreMessages = data.hasMore;
       oldestTimestamp = data.oldestTimestamp;
       const msgs = document.getElementById('messages');
       const wasAtBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 60;
-      renderMessages(data.messages || [], false);
+      renderMessages(data.messages || [], false, data.agentRunning);
       if (wasAtBottom) msgs.scrollTop = msgs.scrollHeight;
     }
   } catch {}

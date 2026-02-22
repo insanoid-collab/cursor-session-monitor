@@ -5,7 +5,7 @@ import { TelegramNotificationService } from '../services/telegram-notification-s
 import { listWorkspaces, listConversations, getConversation, getWaitingConversations } from '../services/cursor-conversations';
 import { logger } from '../utils/logger';
 import { appendToConversation, submitQuestionAnswer, submitPlanReview } from '../services/cursor-memory';
-import { resumeConversation } from '../services/cursor-cli';
+import { resumeConversation, getActiveAgents } from '../services/cursor-cli';
 import { chatPageHtml } from './chat-page';
 
 // Runtime state: Telegram notifications off by default
@@ -134,7 +134,12 @@ export async function registerRoutes(
   app.get('/api/conversations', async (req) => {
     const { workspace } = req.query as { workspace?: string };
     if (!workspace) return { conversations: [] };
-    return { conversations: listConversations(workspace) };
+    const conversations = listConversations(workspace);
+    const agents = getActiveAgents();
+    for (const c of conversations) {
+      if (agents.has(c.id)) (c as any).agentRunning = true;
+    }
+    return { conversations };
   });
 
   app.get('/api/conversations/:id', async (req) => {
@@ -142,7 +147,8 @@ export async function registerRoutes(
     const { limit, before } = req.query as { limit?: string; before?: string };
     const page = getConversation(id, limit ? Number(limit) : 50, before || undefined);
     const title = page.messages.find(m => m.type === 1)?.text?.slice(0, 80) ?? 'Untitled';
-    return { id, title, ...page };
+    const agentRunning = getActiveAgents().has(id);
+    return { id, title, agentRunning, ...page };
   });
 
   app.post('/api/conversations/:id/reply', async (req, reply) => {
