@@ -183,10 +183,28 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .plan-todo .todo-check { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--border-strong); flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; font-size: 10px; }
 .plan-todo.done .todo-check { border-color: var(--green); background: var(--green-dim); color: var(--green); }
 .plan-todo.done { color: var(--text-dim); }
-.plan-card-review { font-size: 11px; color: var(--text-dim); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
-.plan-card-review .review-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
-.plan-card-review .review-badge.requested { background: var(--orange-dim); color: var(--orange); }
-.plan-card-review .review-badge.approved { background: var(--green-dim); color: var(--green); }
+.plan-card-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.plan-card-actions .plan-view-btn { background: none; border: 1px solid var(--border-strong); border-radius: var(--radius-xs); padding: 6px 14px; font-size: 12px; color: var(--text); cursor: pointer; transition: all var(--transition); font-family: inherit; }
+.plan-card-actions .plan-view-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+.plan-card-actions .plan-approve-btn { background: var(--green); color: #fff; border: none; border-radius: var(--radius-xs); padding: 6px 18px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all var(--transition); font-family: inherit; }
+.plan-card-actions .plan-approve-btn:hover { filter: brightness(1.15); }
+.plan-card-actions .plan-approve-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.plan-card-actions .plan-reject-btn { background: none; border: 1px solid var(--border-strong); border-radius: var(--radius-xs); padding: 6px 14px; font-size: 12px; color: var(--text-dim); cursor: pointer; transition: all var(--transition); font-family: inherit; }
+.plan-card-actions .plan-reject-btn:hover { border-color: var(--orange); color: var(--orange); }
+.plan-card-actions .plan-status { font-size: 11px; margin-left: auto; }
+.plan-card-actions .plan-status .review-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+.plan-card-actions .review-badge.requested { background: var(--orange-dim); color: var(--orange); }
+.plan-card-actions .review-badge.approved { background: var(--green-dim); color: var(--green); }
+.plan-card-actions .review-badge.rejected { background: rgba(255,107,107,0.15); color: var(--orange); }
+.plan-card.approved { border-color: var(--green); border-left-color: var(--green); }
+.plan-full-md { margin-top: 10px; padding: 14px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--border); max-height: 400px; overflow-y: auto; font-size: 12px; line-height: 1.6; }
+.plan-full-md h1, .plan-full-md h2, .plan-full-md h3 { color: var(--text-bright); font-weight: 600; margin: 10px 0 4px; }
+.plan-full-md h1 { font-size: 15px; } .plan-full-md h2 { font-size: 13px; } .plan-full-md h3 { font-size: 12px; }
+.plan-full-md ul, .plan-full-md ol { padding-left: 20px; margin: 4px 0; }
+.plan-full-md li { margin: 2px 0; }
+.plan-full-md strong { color: var(--text-bright); }
+.plan-full-md code { background: var(--code-bg); padding: 2px 5px; border-radius: 3px; font-size: 11px; }
+.plan-full-md a { color: var(--accent); }
 .plan-card .msg-time { margin-top: 8px; }
 
 /* Code & markdown */
@@ -600,7 +618,11 @@ function buildSubagentHtml(m) {
 
 function buildPlanHtml(m) {
   var p = m.plan;
-  var html = '<div class="plan-card">';
+  var isApproved = p.reviewStatus === 'Approved';
+  var isRejected = p.reviewStatus === 'Rejected';
+  var isPending = p.reviewStatus === 'Requested';
+  var cardCls = 'plan-card' + (isApproved ? ' approved' : '');
+  var html = '<div class="' + cardCls + '" data-bubble-id="' + esc(m.bubbleId) + '">';
   html += '<div class="plan-card-header">&#9776; Plan</div>';
   html += '<div class="plan-card-name">' + esc(p.name) + '</div>';
   if (p.overview) {
@@ -617,13 +639,71 @@ function buildPlanHtml(m) {
     });
     html += '</div>';
   }
-  if (p.reviewStatus && p.reviewStatus !== 'unknown') {
-    var badgeCls = p.reviewStatus === 'Approved' ? 'approved' : 'requested';
-    html += '<div class="plan-card-review">Review: <span class="review-badge ' + badgeCls + '">' + esc(p.reviewStatus) + '</span></div>';
+  // Actions: View Plan + Approve/Reject
+  html += '<div class="plan-card-actions">';
+  html += '<button class="plan-view-btn" onclick="togglePlanMarkdown(this)">View Plan</button>';
+  if (isPending) {
+    html += '<button class="plan-approve-btn" onclick="submitPlanReview(this, \\'approve\\')">Approve</button>';
+    html += '<button class="plan-reject-btn" onclick="submitPlanReview(this, \\'reject\\')">Reject</button>';
+  } else {
+    var badgeCls = isApproved ? 'approved' : isRejected ? 'rejected' : 'requested';
+    html += '<span class="plan-status"><span class="review-badge ' + badgeCls + '">' + esc(p.reviewStatus) + '</span></span>';
+  }
+  html += '</div>';
+  // Hidden full plan markdown
+  if (p.markdown) {
+    html += '<div class="plan-full-md" style="display:none">' + renderMarkdown(p.markdown) + '</div>';
   }
   html += '<div class="msg-time">' + (m.createdAt ? shortTime(m.createdAt) : '') + '</div>';
   html += '</div>';
   return html;
+}
+
+function togglePlanMarkdown(btn) {
+  var card = btn.closest('.plan-card');
+  var md = card.querySelector('.plan-full-md');
+  if (!md) return;
+  var showing = md.style.display !== 'none';
+  md.style.display = showing ? 'none' : 'block';
+  btn.textContent = showing ? 'View Plan' : 'Hide Plan';
+}
+
+async function submitPlanReview(btn, action) {
+  var card = btn.closest('.plan-card');
+  var bubbleId = card.getAttribute('data-bubble-id');
+  var actionsRow = card.querySelector('.plan-card-actions');
+
+  // Disable buttons during submission
+  var buttons = actionsRow.querySelectorAll('button');
+  buttons.forEach(function(b) { b.disabled = true; });
+  btn.textContent = action === 'approve' ? 'Approving...' : 'Rejecting...';
+
+  try {
+    var res = await fetch(API + '/api/conversations/' + activeConvId + '/plan-review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bubbleId: bubbleId, action: action, workspaceHash: activeWorkspaceHash }),
+    });
+    if (!res.ok) throw new Error('failed');
+
+    // Update card UI immediately
+    if (action === 'approve') {
+      card.classList.add('approved');
+    }
+    // Replace buttons with status badge
+    var badgeCls = action === 'approve' ? 'approved' : 'rejected';
+    var label = action === 'approve' ? 'Approved' : 'Rejected';
+    // Keep the view plan button, replace approve/reject with badge
+    var viewBtn = actionsRow.querySelector('.plan-view-btn');
+    actionsRow.innerHTML = '';
+    if (viewBtn) actionsRow.appendChild(viewBtn);
+    actionsRow.insertAdjacentHTML('beforeend', '<span class="plan-status"><span class="review-badge ' + badgeCls + '">' + label + '</span></span>');
+
+    refreshMessages();
+  } catch (e) {
+    buttons.forEach(function(b) { b.disabled = false; });
+    btn.textContent = action === 'approve' ? 'Approve' : 'Reject';
+  }
 }
 
 var thinkingCounter = 0;

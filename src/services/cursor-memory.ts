@@ -144,6 +144,66 @@ export function submitQuestionAnswer(
   }
 }
 
+/**
+ * Approve or reject a create_plan bubble in Cursor's DB.
+ * Mimics what the Cursor GUI does when the user clicks Build/Reject.
+ */
+export function submitPlanReview(
+  conversationId: string,
+  bubbleId: string,
+  action: 'approve' | 'reject',
+): boolean {
+  if (!fs.existsSync(GLOBAL_STATE_DB)) {
+    logger.warn(`cursor state db not found: ${GLOBAL_STATE_DB}`);
+    return false;
+  }
+
+  let db: Database.Database | null = null;
+  try {
+    db = new Database(GLOBAL_STATE_DB);
+    const key = `bubbleId:${conversationId}:${bubbleId}`;
+    const row = db
+      .prepare('SELECT value FROM cursorDiskKV WHERE key = ?')
+      .get(key) as { value: string } | undefined;
+
+    if (!row) {
+      logger.warn(`create_plan bubble not found: ${key}`);
+      return false;
+    }
+
+    const bubble = JSON.parse(row.value);
+    const tfd = bubble.toolFormerData;
+    if (!tfd || tfd.name !== 'create_plan') {
+      logger.warn(`bubble ${key} is not a create_plan`);
+      return false;
+    }
+
+    const approved = action === 'approve';
+    tfd.additionalData = {
+      ...tfd.additionalData,
+      reviewData: {
+        ...tfd.additionalData?.reviewData,
+        status: approved ? 'Approved' : 'Rejected',
+        selectedOption: approved ? 'approve' : 'reject',
+      },
+    };
+
+    tfd.result = JSON.stringify(approved ? {} : { rejected: {} });
+    tfd.userDecision = approved ? 'accepted' : 'rejected';
+
+    db.prepare('INSERT OR REPLACE INTO cursorDiskKV (key, value) VALUES (?, ?)')
+      .run(key, JSON.stringify(bubble));
+
+    logger.info(`${action}d plan bubble ${bubbleId} in conversation ${conversationId}`);
+    return true;
+  } catch (err) {
+    logger.error(`failed to ${action} plan: ${String(err)}`);
+    return false;
+  } finally {
+    db?.close();
+  }
+}
+
 export function appendToConversation(
   conversationId: string,
   prompt: string,

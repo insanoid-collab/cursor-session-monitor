@@ -74,6 +74,7 @@ export interface ChatMessage {
   plan?: {
     name: string;
     overview: string;
+    markdown: string;
     todos: { id: string; content: string; status: string }[];
     reviewStatus: string; // 'Requested' | 'Approved' | 'Rejected'
   };
@@ -374,6 +375,7 @@ export function getConversation(
             plan = {
               name: params.name ?? 'Plan',
               overview: params.overview ?? '',
+              markdown: params.plan ?? '',
               todos: (params.todos ?? []).map((t: any) => ({
                 id: t.id ?? '',
                 content: t.content ?? '',

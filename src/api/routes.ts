@@ -4,7 +4,7 @@ import { SessionManager } from '../services/session-manager';
 import { TelegramNotificationService } from '../services/telegram-notification-service';
 import { listWorkspaces, listConversations, getConversation, getWaitingConversations } from '../services/cursor-conversations';
 import { logger } from '../utils/logger';
-import { appendToConversation, submitQuestionAnswer } from '../services/cursor-memory';
+import { appendToConversation, submitQuestionAnswer, submitPlanReview } from '../services/cursor-memory';
 import { resumeConversation } from '../services/cursor-cli';
 import { chatPageHtml } from './chat-page';
 
@@ -209,6 +209,35 @@ export async function registerRoutes(
 
     resumeConversation(id, summaryPrompt, workspacePath);
     reply.send({ status: 'submitted' });
+  });
+
+  app.post('/api/conversations/:id/plan-review', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as { bubbleId: string; action: 'approve' | 'reject'; workspaceHash?: string };
+
+    if (!body.bubbleId || !['approve', 'reject'].includes(body.action)) {
+      reply.code(400).send({ error: 'bubbleId and action (approve/reject) are required' });
+      return;
+    }
+
+    const ok = submitPlanReview(id, body.bubbleId, body.action);
+    if (!ok) {
+      reply.code(500).send({ error: 'failed to update plan in cursor DB' });
+      return;
+    }
+
+    const prompt = body.action === 'approve'
+      ? 'User approved the plan. Proceed with implementation.'
+      : 'User rejected the plan.';
+
+    let workspacePath: string | null = null;
+    if (body.workspaceHash) {
+      const ws = listWorkspaces().find(w => w.hash === body.workspaceHash);
+      if (ws) workspacePath = ws.folder;
+    }
+
+    resumeConversation(id, prompt, workspacePath);
+    reply.send({ status: body.action === 'approve' ? 'approved' : 'rejected' });
   });
 
   // --- Periodic scan for "needs input" conversations ---
