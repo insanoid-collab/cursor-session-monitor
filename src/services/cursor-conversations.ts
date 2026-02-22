@@ -305,6 +305,139 @@ export interface ConversationPage {
   totalCount: number;
 }
 
+/**
+ * Deduplicate messages caused by Cursor's context window replays.
+ * When the context resets, Cursor replays earlier messages with new bubble IDs,
+ * creating duplicates. This merges them by keeping only the last occurrence of
+ * each unique message and consolidating sub-agent states.
+ */
+function deduplicateMessages(messages: ChatMessage[]): ChatMessage[] {
+  const statusRank = (s: string) => (s === 'success' ? 3 : s === 'error' ? 2 : 1);
+
+  // Phase 1: Build best-known state for each subagentId
+  const subagentBest = new Map<string, {
+    description: string;
+    status: string;
+    terminationReason: string | null;
+  }>();
+
+  for (const m of messages) {
+    const sid = m.subagentTask?.subagentId;
+    if (!sid) continue;
+    const existing = subagentBest.get(sid);
+    if (!existing || statusRank(m.subagentTask!.status) >= statusRank(existing.status)) {
+      subagentBest.set(sid, {
+        description: m.subagentTask!.description || existing?.description || '',
+        status: m.subagentTask!.status,
+        terminationReason: m.subagentTask!.terminationReason,
+      });
+    } else if (!existing.description && m.subagentTask!.description) {
+      existing.description = m.subagentTask!.description;
+    }
+  }
+
+  // Also build a description→subagentId lookup for matching empty-ID sub-agents
+  const descToSid = new Map<string, string>();
+  for (const [sid, best] of subagentBest) {
+    if (best.description) descToSid.set(best.description, sid);
+  }
+
+  // Phase 2: Walk backwards keeping only the last occurrence of each unique message.
+  // For sub-agents we prefer the LATEST chronological position (correct after context
+  // replays) but patch in the real subagentId from earlier versions for navigation.
+  const seenText = new Set<string>();
+  const seenSubagentDescs = new Set<string>();
+  const seenSubagentIds = new Set<string>();
+  const seenQuestions = new Set<string>();
+  const seenPlans = new Set<string>();
+  const result: ChatMessage[] = [];
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+
+    // Sub-agent dedup
+    if (m.subagentTask) {
+      const sid = m.subagentTask.subagentId;
+      const desc = m.subagentTask.description;
+
+      // Skip orphaned empty-desc + empty-id sub-agents
+      if (!desc && !sid) continue;
+
+      // Dedup key: prefer subagentId, fall back to description
+      const dedupKey = desc || sid;
+      if (seenSubagentDescs.has(dedupKey)) continue;
+      seenSubagentDescs.add(dedupKey);
+      if (desc) seenSubagentDescs.add(desc);
+      if (sid) {
+        seenSubagentIds.add(sid);
+        seenSubagentDescs.add(sid);
+      }
+
+      // Patch: ensure best state + real subagentId for navigation
+      const realSid = sid || (desc ? descToSid.get(desc) : undefined);
+      const best = realSid ? subagentBest.get(realSid) : undefined;
+      if (best) {
+        m.subagentTask.description = best.description || desc;
+        m.subagentTask.status = best.status;
+        m.subagentTask.terminationReason = best.terminationReason;
+      }
+      if (!sid && realSid) {
+        m.subagentTask.subagentId = realSid;
+      }
+
+      // Mark all resolved identifiers as seen so later duplicates are skipped
+      if (m.subagentTask.description) seenSubagentDescs.add(m.subagentTask.description);
+      if (realSid) { seenSubagentDescs.add(realSid); seenSubagentIds.add(realSid); }
+
+      result.unshift(m);
+      continue;
+    }
+
+    // Question dedup — key on question prompts
+    if (m.askQuestion?.questions?.length) {
+      const key = m.askQuestion.questions.map(q => q.prompt).join('|');
+      if (seenQuestions.has(key)) continue;
+      seenQuestions.add(key);
+      // Skip cancelled questions entirely — they're from context resets
+      if (m.askQuestion.status === 'cancelled') continue;
+      result.unshift(m);
+      continue;
+    }
+
+    // Plan dedup — key on plan name
+    if (m.plan) {
+      const key = m.plan.name;
+      if (seenPlans.has(key)) continue;
+      seenPlans.add(key);
+      result.unshift(m);
+      continue;
+    }
+
+    // Text message dedup — key on type + text content
+    if (m.text.length > 10) {
+      const key = `${m.type}:${m.text}`;
+      if (seenText.has(key)) continue;
+      seenText.add(key);
+    }
+
+    result.unshift(m);
+  }
+
+  // Phase 3: Move orphaned assistant messages before the first user message
+  // to just after it. Context window replays can cause agent output to appear
+  // chronologically before the user prompt that triggered it.
+  const firstUserIdx = result.findIndex(m => m.type === 1);
+  if (firstUserIdx > 0) {
+    const before = result.slice(0, firstUserIdx);
+    const after = result.slice(firstUserIdx);
+    // Insert the pre-user messages just after the user message
+    after.splice(1, 0, ...before);
+    return after;
+  }
+
+  return result;
+}
+
 export function getConversation(
   conversationId: string,
   limit = 50,
@@ -406,6 +539,9 @@ export function getConversation(
 
     // Sort chronologically
     messages.sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1));
+
+    // Deduplicate context-window replays
+    messages = deduplicateMessages(messages);
     const totalCount = messages.length;
 
     // If "before" cursor provided, slice messages before that timestamp
