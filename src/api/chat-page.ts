@@ -100,9 +100,10 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .subagent-badge { font-size: 10px; color: var(--accent); background: var(--accent-glow); padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; }
 .pending-badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; background: var(--orange-dim); color: var(--orange); animation: pulse 2s ease-in-out infinite; }
 .agent-badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; background: var(--green-dim); color: var(--green); animation: pulse 2s ease-in-out infinite; }
-.agent-running-indicator { align-self: flex-start; display: flex; flex-direction: column; gap: 4px; padding: 8px 16px; width: 100%; }
-.agent-running-header { display: flex; align-items: center; gap: 8px; color: var(--green); font-size: 12px; font-weight: 500; }
-.agent-running-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.5s ease-in-out infinite; }
+.agent-running-indicator { align-self: flex-start; display: flex; flex-direction: column; gap: 6px; padding: 8px 16px; width: 100%; }
+.agent-running-header { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 13px; font-weight: 500; font-family: 'SF Mono', 'Fira Code', monospace; }
+.braille-spinner { display: inline-block; width: 1.2em; text-align: center; color: var(--green); font-size: 14px; }
+.agent-elapsed { color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .agent-output { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.5; color: var(--text-dim); max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; margin-top: 4px; }
 .agent-output .line { opacity: 0.7; }
 .agent-output .line:last-child { opacity: 1; color: var(--text); }
@@ -1216,14 +1217,21 @@ function renderMessages(messages, scrollToBottom, agentRunning) {
   html += buildMessagesHtml(messages, agentRunning);
   if (agentRunning) {
     html += '<div class="agent-running-indicator">';
-    html += '<div class="agent-running-header"><span class="agent-running-dot"></span> Agent running...</div>';
+    html += '<div class="agent-running-header"><span class="braille-spinner" id="braille-spinner"></span> <span class="agent-elapsed" id="agent-elapsed"></span></div>';
     html += '<div class="agent-output" id="agent-output"></div>';
     html += '</div>';
   }
   msgs.innerHTML = html;
   if (scrollToBottom) msgs.scrollTop = msgs.scrollHeight;
   updateRunningState(messages, agentRunning);
-  if (agentRunning) pollAgentOutput();
+  if (agentRunning) {
+    agentStartedAt = Date.now(); // fallback; overwritten by server startedAt if available
+    tickSpinner();
+    pollAgentOutput();
+  } else {
+    if (spinnerTimer) { clearInterval(spinnerTimer); spinnerTimer = null; }
+    agentStartedAt = 0;
+  }
 }
 
 async function refreshMessages() {
@@ -1253,19 +1261,55 @@ function startPollTimer() {
   pollTimer = setInterval(() => refreshMessages(), interval);
 }
 
+var brailleFrames = ['\\u2839','\\u2838','\\u2834','\\u2826','\\u2807','\\u280F','\\u2819','\\u283B'];
+var brailleIdx = 0;
+var agentStartedAt = 0;
+var spinnerTimer = null;
+
+function formatElapsed(ms) {
+  var s = Math.floor(ms / 1000);
+  if (s < 60) return s + '.' + Math.floor((ms % 1000) / 100) + 's';
+  var m = Math.floor(s / 60);
+  var rem = s % 60;
+  return m + 'm, ' + rem + '.' + Math.floor((ms % 1000) / 100) + 's';
+}
+
+function tickSpinner() {
+  var sp = document.getElementById('braille-spinner');
+  var el = document.getElementById('agent-elapsed');
+  if (!sp || !el) return;
+  brailleIdx = (brailleIdx + 1) % brailleFrames.length;
+  sp.textContent = brailleFrames[brailleIdx];
+  if (agentStartedAt) {
+    el.textContent = formatElapsed(Date.now() - agentStartedAt);
+  }
+}
+
 async function pollAgentOutput() {
   if (agentOutputTimer) clearInterval(agentOutputTimer);
+  if (spinnerTimer) clearInterval(spinnerTimer);
   agentOutputLineCount = 0;
+  // Start spinner animation at 80ms for smooth braille cycling
+  spinnerTimer = setInterval(tickSpinner, 80);
   agentOutputTimer = setInterval(async function() {
     if (!activeConvId || !lastAgentRunning) {
       clearInterval(agentOutputTimer);
+      clearInterval(spinnerTimer);
       agentOutputTimer = null;
+      spinnerTimer = null;
       return;
     }
     try {
       var res = await fetch(API + '/api/agents/' + activeConvId + '/output?after=' + agentOutputLineCount);
       var data = await res.json();
-      if (!data.running) { clearInterval(agentOutputTimer); agentOutputTimer = null; return; }
+      if (!data.running) {
+        clearInterval(agentOutputTimer);
+        clearInterval(spinnerTimer);
+        agentOutputTimer = null;
+        spinnerTimer = null;
+        return;
+      }
+      if (data.startedAt && !agentStartedAt) agentStartedAt = data.startedAt;
       if (data.lines.length === 0) return;
       agentOutputLineCount = data.totalLines;
       var el = document.getElementById('agent-output');
@@ -1274,7 +1318,6 @@ async function pollAgentOutput() {
         el.innerHTML += '<div class="line">' + esc(data.lines[i]) + '</div>';
       }
       el.scrollTop = el.scrollHeight;
-      // Also scroll the messages container to keep output visible
       var msgs = document.getElementById('messages');
       if (msgs) msgs.scrollTop = msgs.scrollHeight;
     } catch {}

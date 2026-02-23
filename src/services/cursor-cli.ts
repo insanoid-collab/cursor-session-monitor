@@ -25,12 +25,13 @@ export function getActiveAgents(): Map<string, AgentState> {
 }
 
 /** Get streaming output for a specific agent. Returns null if no agent running. */
-export function getAgentOutput(conversationId: string, afterLine = 0): { lines: string[]; totalLines: number } | null {
+export function getAgentOutput(conversationId: string, afterLine = 0): { lines: string[]; totalLines: number; startedAt: number } | null {
   const agent = activeAgents.get(conversationId);
   if (!agent) return null;
   return {
     lines: agent.output.slice(afterLine),
     totalLines: agent.output.length,
+    startedAt: agent.startedAt,
   };
 }
 
