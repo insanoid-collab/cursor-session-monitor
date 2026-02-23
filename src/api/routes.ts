@@ -149,7 +149,7 @@ export async function registerRoutes(
     const cursorTitle = getConversationTitle(id);
     const title = cursorTitle !== 'Untitled' ? cursorTitle
       : page.messages.find(m => m.type === 1)?.text?.slice(0, 80) ?? 'Untitled';
-    const agentRunning = getActiveAgents().has(id);
+    const agentRunning = getActiveAgents().has(id) || page.agentBusy;
     return { id, title, agentRunning, ...page };
   });
 

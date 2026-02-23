@@ -104,7 +104,8 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .agent-running-header { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 13px; font-weight: 500; font-family: 'SF Mono', 'Fira Code', monospace; }
 .braille-spinner { display: inline-block; width: 1.2em; text-align: center; color: var(--green); font-size: 14px; }
 .agent-elapsed { color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.agent-output { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.5; color: var(--text-dim); max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; margin-top: 4px; }
+.agent-output { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.5; color: var(--text-dim); max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; margin-top: 4px; display: none; }
+.agent-output:not(:empty) { display: block; }
 .agent-output .line { opacity: 0.7; }
 .agent-output .line:last-child { opacity: 1; color: var(--text); }
 

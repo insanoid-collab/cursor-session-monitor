@@ -354,6 +354,8 @@ export interface ConversationPage {
   hasMore: boolean;
   oldestTimestamp: string;
   totalCount: number;
+  /** True when the last bubble in Cursor's DB has an in-progress tool call. */
+  agentBusy: boolean;
 }
 
 /**
@@ -597,7 +599,7 @@ export function getConversation(
   before?: string,
 ): ConversationPage {
   const db = openReadonly(GLOBAL_STATE_DB);
-  if (!db) return { messages: [], hasMore: false, oldestTimestamp: '', totalCount: 0 };
+  if (!db) return { messages: [], hasMore: false, oldestTimestamp: '', totalCount: 0, agentBusy: false };
 
   try {
     const prefix = `bubbleId:${conversationId}:`;
@@ -606,6 +608,7 @@ export function getConversation(
       .all(prefix, prefix + '\xff') as { value: string }[];
 
     let messages: ChatMessage[] = [];
+    let hasRunningTool = false;
     for (const row of rows) {
       try {
         const msg = JSON.parse(row.value);
@@ -706,6 +709,11 @@ export function getConversation(
           toolCall = parseToolCall(tfd);
         }
 
+        // Detect in-progress tool calls (agent actively working)
+        if (tfd && tfd.status === 'running') {
+          hasRunningTool = true;
+        }
+
         // Allow empty text for special bubble types
         if ((!msg.text || msg.text.length === 0) && !askQuestion && !subagentTask && !plan && !toolCall) continue;
 
@@ -759,7 +767,7 @@ export function getConversation(
       if (idx > 0) {
         messages = messages.slice(0, idx);
       } else if (idx === 0) {
-        return { messages: [], hasMore: false, oldestTimestamp: '', totalCount };
+        return { messages: [], hasMore: false, oldestTimestamp: '', totalCount, agentBusy: hasRunningTool };
       }
     }
 
@@ -768,7 +776,7 @@ export function getConversation(
     const sliced = messages.slice(-limit);
     const oldestTimestamp = sliced[0]?.createdAt ?? '';
 
-    return { messages: sliced, hasMore, oldestTimestamp, totalCount };
+    return { messages: sliced, hasMore, oldestTimestamp, totalCount, agentBusy: hasRunningTool };
   } finally {
     db.close();
   }
