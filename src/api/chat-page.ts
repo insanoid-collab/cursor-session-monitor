@@ -136,6 +136,7 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .message.assistant { align-self: flex-start; background: var(--assistant-bg); border: 1px solid var(--assistant-border); border-bottom-left-radius: 4px; box-shadow: var(--shadow); }
 .message .msg-time { font-size: 10px; color: var(--text-dim); margin-top: 6px; text-align: right; opacity: 0.7; }
 .message.assistant .msg-time { text-align: left; }
+.msg-duration { margin-left: 6px; padding: 1px 6px; border-radius: 8px; background: var(--surface); font-variant-numeric: tabular-nums; }
 
 /* Thinking steps */
 .question-card { align-self: flex-start; max-width: 75%; margin: 6px 0; background: var(--surface); border: 1px solid var(--orange); border-left: 3px solid var(--orange); border-radius: var(--radius-sm); padding: 12px 16px; }
@@ -1139,10 +1140,22 @@ async function submitQuestionAnswers(btn) {
   }
 }
 
+function formatDuration(ms) {
+  if (ms < 0) return '';
+  var s = Math.floor(ms / 1000);
+  if (s < 60) return s + 's';
+  var m = Math.floor(s / 60);
+  var rem = s % 60;
+  if (m < 60) return m + 'm ' + rem + 's';
+  var h = Math.floor(m / 60);
+  return h + 'h ' + (m % 60) + 'm';
+}
+
 function buildMessagesHtml(messages, agentRunning) {
   var html = '';
   var i = 0;
   var lastActivityIdx = -1;
+  var lastUserTime = null;
   // Pre-scan to find the last activity group index when agent is running
   if (agentRunning) {
     var j = 0;
@@ -1153,6 +1166,22 @@ function buildMessagesHtml(messages, agentRunning) {
       } else { j++; }
     }
   }
+  // Pre-scan: find the last assistant text message index per turn
+  // (to show duration only on the final response, not intermediate ones)
+  var lastAssistantPerTurn = {};
+  var turnStart = null;
+  for (var k = 0; k < messages.length; k++) {
+    if (messages[k].type === 1) {
+      turnStart = k;
+    } else if (messages[k].type === 2 && !messages[k].toolCall && !messages[k].plan && !messages[k].askQuestion && !messages[k].subagentTask && messages[k].text.length >= 80) {
+      if (turnStart !== null) lastAssistantPerTurn[turnStart] = k;
+    }
+  }
+  var turnDurationMap = {};
+  for (var tk in lastAssistantPerTurn) {
+    turnDurationMap[lastAssistantPerTurn[tk]] = parseInt(tk);
+  }
+
   while (i < messages.length) {
     var m = messages[i];
     if (m.plan) {
@@ -1165,6 +1194,7 @@ function buildMessagesHtml(messages, agentRunning) {
       html += buildQuestionHtml(m);
       i++;
     } else if (m.type === 1) {
+      lastUserTime = m.createdAt;
       html += '<div class="message user">' +
         renderMarkdown(m.text) +
         '<div class="msg-time">' + (m.createdAt ? shortTime(m.createdAt) : '') + '</div>' +
@@ -1182,9 +1212,14 @@ function buildMessagesHtml(messages, agentRunning) {
       var isLastGroup = agentRunning && groupStart === lastActivityIdx;
       html += buildActivityHtml(tools, thinks, isLastGroup);
     } else {
+      var dur = '';
+      if (turnDurationMap.hasOwnProperty(i) && lastUserTime && m.createdAt) {
+        var elapsed = new Date(m.createdAt).getTime() - new Date(lastUserTime).getTime();
+        if (elapsed > 0) dur = ' <span class="msg-duration">' + formatDuration(elapsed) + '</span>';
+      }
       html += '<div class="message assistant">' +
         renderMarkdown(m.text) +
-        '<div class="msg-time">' + (m.createdAt ? shortTime(m.createdAt) : '') + '</div>' +
+        '<div class="msg-time">' + (m.createdAt ? shortTime(m.createdAt) : '') + dur + '</div>' +
       '</div>';
       i++;
     }
