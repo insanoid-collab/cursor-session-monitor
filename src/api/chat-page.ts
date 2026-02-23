@@ -100,8 +100,12 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .subagent-badge { font-size: 10px; color: var(--accent); background: var(--accent-glow); padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; }
 .pending-badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; background: var(--orange-dim); color: var(--orange); animation: pulse 2s ease-in-out infinite; }
 .agent-badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; background: var(--green-dim); color: var(--green); animation: pulse 2s ease-in-out infinite; }
-.agent-running-indicator { align-self: flex-start; display: flex; align-items: center; gap: 8px; padding: 8px 16px; color: var(--green); font-size: 12px; font-weight: 500; }
+.agent-running-indicator { align-self: flex-start; display: flex; flex-direction: column; gap: 4px; padding: 8px 16px; width: 100%; }
+.agent-running-header { display: flex; align-items: center; gap: 8px; color: var(--green); font-size: 12px; font-weight: 500; }
 .agent-running-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.5s ease-in-out infinite; }
+.agent-output { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.5; color: var(--text-dim); max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; margin-top: 4px; }
+.agent-output .line { opacity: 0.7; }
+.agent-output .line:last-child { opacity: 1; color: var(--text); }
 
 /* Sub-agent tabs */
 #agent-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 20px; overflow-x: auto; min-height: 0; background: var(--bg-elevated); }
@@ -115,6 +119,11 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 #main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
 #main-header { padding: 14px 24px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 500; color: var(--text-dim); display: flex; align-items: center; gap: 10px; min-height: 52px; background: var(--bg-elevated); }
 #main-header .conv-mode { font-size: 11px; background: var(--accent-glow); padding: 3px 10px; border-radius: 10px; color: var(--accent); font-weight: 500; }
+.cursor-refresh-btn { background: none; border: 1px solid var(--border-strong); border-radius: var(--radius-xs); padding: 4px 10px; font-size: 11px; color: var(--text-dim); cursor: pointer; margin-left: auto; transition: all var(--transition); font-family: inherit; display: flex; align-items: center; gap: 4px; }
+.cursor-refresh-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+.cursor-refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.cursor-refresh-btn .spin { animation: spin 1s linear infinite; display: inline-block; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 #mobile-back-btn { display: none; cursor: pointer; padding: 4px 8px 4px 0; color: var(--text-dim); font-size: 18px; }
 #messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
 #empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-dim); font-size: 14px; gap: 12px; }
@@ -190,6 +199,8 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .plan-card-actions .review-badge.approved { background: var(--green-dim); color: var(--green); }
 .plan-card-actions .review-badge.rejected { background: rgba(255,107,107,0.15); color: var(--orange); }
 .plan-card.approved { border-color: var(--green); border-left-color: var(--green); }
+.plan-retry-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 14px; padding: 0 4px; opacity: 0.5; transition: opacity var(--transition); }
+.plan-retry-btn:hover { opacity: 1; color: var(--accent); }
 .plan-card .msg-time { margin-top: 8px; }
 
 /* Plan drawer */
@@ -387,6 +398,8 @@ let hasMoreMessages = false;
 let loadingMore = false;
 let lastMessageCount = 0;
 let lastAgentRunning = false;
+let agentOutputTimer = null;
+let agentOutputLineCount = 0;
 
 function isMobile() { return window.innerWidth <= 768; }
 
@@ -581,10 +594,7 @@ async function switchToAgent(id) {
   try {
     var res = await fetch(API + '/api/conversations/' + id + '?limit=50');
     var data = await res.json();
-    document.getElementById('main-header').innerHTML =
-      '<span id="mobile-back-btn" onclick="showSidebar()">&#8592;</span>' +
-      esc(data.title || 'Conversation') +
-      (data.totalCount ? ' <span class="conv-mode">' + data.totalCount + ' msgs</span>' : '');
+    updateHeader(data.title, data.agentRunning);
     hasMoreMessages = data.hasMore;
     oldestTimestamp = data.oldestTimestamp;
     lastMessageCount = data.totalCount;
@@ -618,10 +628,7 @@ async function loadConversation(id, wsHash, el) {
   try {
     const res = await fetch(API + '/api/conversations/' + id + '?limit=50');
     const data = await res.json();
-    document.getElementById('main-header').innerHTML =
-      '<span id="mobile-back-btn" onclick="showSidebar()">&#8592;</span>' +
-      esc(data.title || 'Conversation') +
-      (data.totalCount ? ' <span class="conv-mode">' + data.totalCount + ' msgs</span>' : '');
+    updateHeader(data.title, data.agentRunning);
     hasMoreMessages = data.hasMore;
     oldestTimestamp = data.oldestTimestamp;
     lastMessageCount = data.totalCount;
@@ -631,8 +638,7 @@ async function loadConversation(id, wsHash, el) {
     msgs.innerHTML = '<div class="loading">Failed to load conversation</div>';
   }
 
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(() => refreshMessages(), 5000);
+  startPollTimer();
 }
 
 async function loadEarlierMessages() {
@@ -696,7 +702,7 @@ function buildSubagentHtml(m) {
 function buildPlanHtml(m) {
   var p = m.plan;
   if (p.markdown) storePlanData(m.bubbleId, p.markdown, p.name);
-  var isApproved = p.reviewStatus === 'Approved';
+  var isApproved = p.reviewStatus === 'Approved' || p.reviewStatus === 'Auto-accepted';
   var isRejected = p.reviewStatus === 'Rejected';
   var isPending = p.reviewStatus === 'Requested';
   var cardCls = 'plan-card' + (isApproved ? ' approved' : '');
@@ -726,8 +732,10 @@ function buildPlanHtml(m) {
     html += '<button class="plan-approve-btn" onclick="submitPlanReview(this, \\'approve\\')">Approve</button>';
     html += '<button class="plan-reject-btn" onclick="submitPlanReview(this, \\'reject\\')">Reject</button>';
   } else {
-    var badgeCls = isApproved ? 'approved' : isRejected ? 'rejected' : 'requested';
-    html += '<span class="plan-status"><span class="review-badge ' + badgeCls + '">' + esc(p.reviewStatus) + '</span></span>';
+    var badgeCls = isApproved ? 'approved' : 'rejected';
+    html += '<span class="plan-status"><span class="review-badge ' + badgeCls + '">' + esc(p.reviewStatus) + '</span>';
+    html += '<button class="plan-retry-btn" onclick="resetPlanReview(this)" title="Reset to retry approval">&#8635;</button>';
+    html += '</span>';
   }
   html += '</div>';
   html += '<div class="msg-time">' + (m.createdAt ? shortTime(m.createdAt) : '') + '</div>';
@@ -735,7 +743,7 @@ function buildPlanHtml(m) {
   return html;
 }
 
-function buildActivityHtml(tools, thinks) {
+function buildActivityHtml(tools, thinks, openByDefault) {
   var counts = {};
   tools.forEach(function(t) {
     var cat = t.toolCall.tool;
@@ -754,7 +762,7 @@ function buildActivityHtml(tools, thinks) {
   var total = tools.length + (thinks ? thinks.length : 0);
   var label = total + ' action' + (total > 1 ? 's' : '');
 
-  var html = '<details class="activity-group">';
+  var html = '<details class="activity-group"' + (openByDefault ? ' open' : '') + '>';
   html += '<summary>';
   html += '<span class="activity-dot"></span>';
   html += '<span class="arrow">&#9654;</span> ' + esc(label);
@@ -941,10 +949,50 @@ async function submitPlanReview(btn, action) {
     if (viewBtn) actionsRow.appendChild(viewBtn);
     actionsRow.insertAdjacentHTML('beforeend', '<span class="plan-status"><span class="review-badge ' + badgeCls + '">' + label + '</span></span>');
 
+    // Auto-sync Cursor IDE so it picks up the plan approval
+    var syncBtn = document.querySelector('.cursor-refresh-btn');
+    if (syncBtn) refreshCursorWindow(syncBtn);
+
     refreshMessages();
   } catch (e) {
     buttons.forEach(function(b) { b.disabled = false; });
     btn.textContent = action === 'approve' ? 'Approve' : 'Reject';
+  }
+}
+
+async function resetPlanReview(btn) {
+  var card = btn.closest('.plan-card');
+  var bubbleId = card.getAttribute('data-bubble-id');
+  btn.disabled = true;
+  try {
+    var res = await fetch(API + '/api/conversations/' + activeConvId + '/plan-review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bubbleId: bubbleId, action: 'reset', workspaceHash: activeWorkspaceHash }),
+    });
+    if (!res.ok) throw new Error('failed');
+    card.classList.remove('approved');
+    refreshMessages();
+  } catch (e) {
+    btn.disabled = false;
+  }
+}
+
+async function refreshCursorWindow(btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">&#8635;</span> Syncing...';
+  try {
+    var res = await fetch(API + '/api/cursor/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceHash: activeWorkspaceHash }),
+    });
+    if (!res.ok) throw new Error('failed');
+    btn.innerHTML = '&#10003; Synced';
+    setTimeout(function() { btn.innerHTML = '&#8635; Sync Cursor'; btn.disabled = false; }, 3000);
+  } catch (e) {
+    btn.innerHTML = '&#10007; Failed';
+    setTimeout(function() { btn.innerHTML = '&#8635; Sync Cursor'; btn.disabled = false; }, 3000);
   }
 }
 
@@ -1089,9 +1137,20 @@ async function submitQuestionAnswers(btn) {
   }
 }
 
-function buildMessagesHtml(messages) {
+function buildMessagesHtml(messages, agentRunning) {
   var html = '';
   var i = 0;
+  var lastActivityIdx = -1;
+  // Pre-scan to find the last activity group index when agent is running
+  if (agentRunning) {
+    var j = 0;
+    while (j < messages.length) {
+      if (messages[j].toolCall || isThinkingStep(messages[j])) {
+        lastActivityIdx = j;
+        while (j < messages.length && (messages[j].toolCall || isThinkingStep(messages[j]))) j++;
+      } else { j++; }
+    }
+  }
   while (i < messages.length) {
     var m = messages[i];
     if (m.plan) {
@@ -1110,6 +1169,7 @@ function buildMessagesHtml(messages) {
       '</div>';
       i++;
     } else if (m.toolCall || isThinkingStep(m)) {
+      var groupStart = i;
       var tools = [];
       var thinks = [];
       while (i < messages.length && (messages[i].toolCall || isThinkingStep(messages[i]))) {
@@ -1117,7 +1177,8 @@ function buildMessagesHtml(messages) {
         else thinks.push(messages[i]);
         i++;
       }
-      html += buildActivityHtml(tools, thinks);
+      var isLastGroup = agentRunning && groupStart === lastActivityIdx;
+      html += buildActivityHtml(tools, thinks, isLastGroup);
     } else {
       html += '<div class="message assistant">' +
         renderMarkdown(m.text) +
@@ -1131,14 +1192,19 @@ function buildMessagesHtml(messages) {
 
 function updateRunningState(messages, agentRunning) {
   var inputArea = document.getElementById('input-area');
-  if (!messages || messages.length === 0) { inputArea.classList.remove('is-running'); return; }
-  var last = messages[messages.length - 1];
-  var status = activityStatus(last.createdAt, last.type, (last.text || '').length);
-  if (status === 'running' || agentRunning) {
+  if (agentRunning) {
     inputArea.classList.add('is-running');
   } else {
     inputArea.classList.remove('is-running');
   }
+}
+
+function updateHeader(title, agentRunning) {
+  var h = document.getElementById('main-header');
+  h.innerHTML = '<span id="mobile-back-btn" onclick="showSidebar()">&#8592;</span>' +
+    esc(title || 'Conversation') +
+    (agentRunning ? ' <span class="agent-badge">Agent running</span>' : '') +
+    '<button class="cursor-refresh-btn" onclick="refreshCursorWindow(this)" title="Reload Cursor window to sync changes">&#8635; Sync Cursor</button>';
 }
 
 function renderMessages(messages, scrollToBottom, agentRunning) {
@@ -1147,13 +1213,17 @@ function renderMessages(messages, scrollToBottom, agentRunning) {
   if (hasMoreMessages) {
     html += '<button id="load-more-btn" onclick="loadEarlierMessages()" class="load-more-btn">Load earlier messages</button>';
   }
-  html += buildMessagesHtml(messages);
+  html += buildMessagesHtml(messages, agentRunning);
   if (agentRunning) {
-    html += '<div class="agent-running-indicator"><span class="agent-running-dot"></span> Agent running...</div>';
+    html += '<div class="agent-running-indicator">';
+    html += '<div class="agent-running-header"><span class="agent-running-dot"></span> Agent running...</div>';
+    html += '<div class="agent-output" id="agent-output"></div>';
+    html += '</div>';
   }
   msgs.innerHTML = html;
   if (scrollToBottom) msgs.scrollTop = msgs.scrollHeight;
   updateRunningState(messages, agentRunning);
+  if (agentRunning) pollAgentOutput();
 }
 
 async function refreshMessages() {
@@ -1162,7 +1232,9 @@ async function refreshMessages() {
     const res = await fetch(API + '/api/conversations/' + activeConvId + '?limit=50');
     const data = await res.json();
     updateRunningState(data.messages || [], data.agentRunning);
-    if (!loadingMore && data.totalCount !== lastMessageCount || data.agentRunning !== lastAgentRunning) {
+    var agentChanged = data.agentRunning !== lastAgentRunning;
+    if (agentChanged) { updateHeader(data.title, data.agentRunning); startPollTimer(); }
+    if (!loadingMore && data.totalCount !== lastMessageCount || agentChanged) {
       lastAgentRunning = data.agentRunning;
       lastMessageCount = data.totalCount;
       hasMoreMessages = data.hasMore;
@@ -1173,6 +1245,40 @@ async function refreshMessages() {
       if (wasAtBottom) msgs.scrollTop = msgs.scrollHeight;
     }
   } catch {}
+}
+
+function startPollTimer() {
+  if (pollTimer) clearInterval(pollTimer);
+  var interval = lastAgentRunning ? 1500 : 5000;
+  pollTimer = setInterval(() => refreshMessages(), interval);
+}
+
+async function pollAgentOutput() {
+  if (agentOutputTimer) clearInterval(agentOutputTimer);
+  agentOutputLineCount = 0;
+  agentOutputTimer = setInterval(async function() {
+    if (!activeConvId || !lastAgentRunning) {
+      clearInterval(agentOutputTimer);
+      agentOutputTimer = null;
+      return;
+    }
+    try {
+      var res = await fetch(API + '/api/agents/' + activeConvId + '/output?after=' + agentOutputLineCount);
+      var data = await res.json();
+      if (!data.running) { clearInterval(agentOutputTimer); agentOutputTimer = null; return; }
+      if (data.lines.length === 0) return;
+      agentOutputLineCount = data.totalLines;
+      var el = document.getElementById('agent-output');
+      if (!el) return;
+      for (var i = 0; i < data.lines.length; i++) {
+        el.innerHTML += '<div class="line">' + esc(data.lines[i]) + '</div>';
+      }
+      el.scrollTop = el.scrollHeight;
+      // Also scroll the messages container to keep output visible
+      var msgs = document.getElementById('messages');
+      if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    } catch {}
+  }, 1000);
 }
 
 async function sendReply() {
@@ -1284,13 +1390,10 @@ function activityStatus(lastMessageAt, lastMessageType, lastMessageLength) {
   if (!lastMessageAt) return 'stale';
   var ms = Date.now() - new Date(lastMessageAt).getTime();
   var mins = ms / 60000;
-  var len = lastMessageLength || 0;
-  // Agent actively generating (short thinking steps arriving)
-  if (lastMessageType === 2 && mins < 2 && len < 300) return 'running';
-  // Agent finished with a real response — needs user input
+  // Agent finished with a response — needs user input
   if (lastMessageType === 2 && mins < 60) return 'waiting';
   // User sent a message recently — agent should be working on it
-  if (lastMessageType === 1 && mins < 30) return 'recent';
+  if (lastMessageType === 1 && mins < 5) return 'recent';
   if (mins < 30) return 'recent';
   return 'stale';
 }

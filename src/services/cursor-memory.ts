@@ -151,7 +151,7 @@ export function submitQuestionAnswer(
 export function submitPlanReview(
   conversationId: string,
   bubbleId: string,
-  action: 'approve' | 'reject',
+  action: 'approve' | 'reject' | 'reset',
 ): boolean {
   if (!fs.existsSync(GLOBAL_STATE_DB)) {
     logger.warn(`cursor state db not found: ${GLOBAL_STATE_DB}`);
@@ -178,18 +178,28 @@ export function submitPlanReview(
       return false;
     }
 
-    const approved = action === 'approve';
-    tfd.additionalData = {
-      ...tfd.additionalData,
-      reviewData: {
-        ...tfd.additionalData?.reviewData,
-        status: approved ? 'Approved' : 'Rejected',
-        selectedOption: approved ? 'approve' : 'reject',
-      },
-    };
-
-    tfd.result = JSON.stringify(approved ? {} : { rejected: {} });
-    tfd.userDecision = approved ? 'accepted' : 'rejected';
+    if (action === 'reset') {
+      // Reset to pending state so user can retry approval
+      tfd.additionalData = {
+        ...tfd.additionalData,
+        reviewData: { ...tfd.additionalData?.reviewData, status: 'Requested', selectedOption: 'none' },
+      };
+      tfd.result = '';
+      tfd.userDecision = null;
+      tfd.status = 'running';
+    } else {
+      const approved = action === 'approve';
+      tfd.additionalData = {
+        ...tfd.additionalData,
+        reviewData: {
+          ...tfd.additionalData?.reviewData,
+          status: approved ? 'Approved' : 'Rejected',
+          selectedOption: approved ? 'approve' : 'reject',
+        },
+      };
+      tfd.result = JSON.stringify(approved ? {} : { rejected: {} });
+      tfd.userDecision = approved ? 'accepted' : 'rejected';
+    }
 
     db.prepare('INSERT OR REPLACE INTO cursorDiskKV (key, value) VALUES (?, ?)')
       .run(key, JSON.stringify(bubble));

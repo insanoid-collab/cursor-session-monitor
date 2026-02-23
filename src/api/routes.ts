@@ -2,10 +2,10 @@ import { FastifyInstance } from 'fastify';
 import { CursorAdapter } from '../adapters/cursor-adapter';
 import { SessionManager } from '../services/session-manager';
 import { TelegramNotificationService } from '../services/telegram-notification-service';
-import { listWorkspaces, listConversations, getConversation, getWaitingConversations } from '../services/cursor-conversations';
+import { listWorkspaces, listConversations, getConversation, getConversationTitle, getWaitingConversations } from '../services/cursor-conversations';
 import { logger } from '../utils/logger';
 import { appendToConversation, submitQuestionAnswer, submitPlanReview } from '../services/cursor-memory';
-import { resumeConversation, getActiveAgents } from '../services/cursor-cli';
+import { resumeConversation, getActiveAgents, getAgentOutput } from '../services/cursor-cli';
 import { chatPageHtml } from './chat-page';
 
 // Runtime state: Telegram notifications off by default
@@ -146,9 +146,20 @@ export async function registerRoutes(
     const { id } = req.params as { id: string };
     const { limit, before } = req.query as { limit?: string; before?: string };
     const page = getConversation(id, limit ? Number(limit) : 50, before || undefined);
-    const title = page.messages.find(m => m.type === 1)?.text?.slice(0, 80) ?? 'Untitled';
+    const cursorTitle = getConversationTitle(id);
+    const title = cursorTitle !== 'Untitled' ? cursorTitle
+      : page.messages.find(m => m.type === 1)?.text?.slice(0, 80) ?? 'Untitled';
     const agentRunning = getActiveAgents().has(id);
     return { id, title, agentRunning, ...page };
+  });
+
+  // Streaming agent output (for live progress while agent runs)
+  app.get('/api/agents/:id/output', async (req) => {
+    const { id } = req.params as { id: string };
+    const { after } = req.query as { after?: string };
+    const result = getAgentOutput(id, after ? Number(after) : 0);
+    if (!result) return { running: false, lines: [], totalLines: 0 };
+    return { running: true, ...result };
   });
 
   app.post('/api/conversations/:id/reply', async (req, reply) => {
@@ -219,16 +230,21 @@ export async function registerRoutes(
 
   app.post('/api/conversations/:id/plan-review', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as { bubbleId: string; action: 'approve' | 'reject'; workspaceHash?: string };
+    const body = req.body as { bubbleId: string; action: 'approve' | 'reject' | 'reset'; workspaceHash?: string };
 
-    if (!body.bubbleId || !['approve', 'reject'].includes(body.action)) {
-      reply.code(400).send({ error: 'bubbleId and action (approve/reject) are required' });
+    if (!body.bubbleId || !['approve', 'reject', 'reset'].includes(body.action)) {
+      reply.code(400).send({ error: 'bubbleId and action (approve/reject/reset) are required' });
       return;
     }
 
     const ok = submitPlanReview(id, body.bubbleId, body.action);
     if (!ok) {
       reply.code(500).send({ error: 'failed to update plan in cursor DB' });
+      return;
+    }
+
+    if (body.action === 'reset') {
+      reply.send({ status: 'reset' });
       return;
     }
 
@@ -244,6 +260,70 @@ export async function registerRoutes(
 
     resumeConversation(id, prompt, workspacePath);
     reply.send({ status: body.action === 'approve' ? 'approved' : 'rejected' });
+  });
+
+  // --- Refresh Cursor IDE window via AppleScript ---
+  app.post('/api/cursor/refresh', async (req, reply) => {
+    const { exec } = await import('node:child_process');
+    const body = req.body as { workspaceHash?: string };
+
+    // Resolve workspace folder name to match against Cursor window titles
+    let windowMatch = '';
+    if (body.workspaceHash) {
+      const ws = listWorkspaces().find(w => w.hash === body.workspaceHash);
+      if (ws?.folder) {
+        const folderName = ws.folder.split('/').pop() ?? '';
+        if (folderName) windowMatch = folderName;
+      }
+    }
+
+    // AppleScript: find the matching window, bring it to front, reload it
+    const script = windowMatch
+      ? `
+        tell application "System Events"
+          tell process "Cursor"
+            set targetWindow to missing value
+            repeat with w in windows
+              if name of w contains "${windowMatch}" then
+                set targetWindow to w
+                exit repeat
+              end if
+            end repeat
+            if targetWindow is not missing value then
+              perform action "AXRaise" of targetWindow
+              set frontmost to true
+              delay 0.2
+              keystroke "p" using {command down, shift down}
+              delay 0.4
+              keystroke "Reload Window"
+              delay 0.4
+              key code 36
+            end if
+          end tell
+        end tell
+      `
+      : `
+        tell application "System Events"
+          tell process "Cursor"
+            set frontmost to true
+            keystroke "p" using {command down, shift down}
+            delay 0.4
+            keystroke "Reload Window"
+            delay 0.4
+            key code 36
+          end tell
+        end tell
+      `;
+
+    exec(`osascript -e '${script.replace(/'/g, "'\\''")}'`, (err) => {
+      if (err) {
+        logger.error(`cursor refresh failed: ${err.message}`);
+        reply.code(500).send({ error: err.message });
+      } else {
+        logger.info(`cursor window reload triggered${windowMatch ? ` for ${windowMatch}` : ''}`);
+        reply.send({ status: 'refreshed' });
+      }
+    });
   });
 
   // --- Periodic scan for "needs input" conversations ---

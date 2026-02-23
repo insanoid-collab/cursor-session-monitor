@@ -77,7 +77,7 @@ export interface ChatMessage {
     overview: string;
     markdown: string;
     todos: { id: string; content: string; status: string }[];
-    reviewStatus: string; // 'Requested' | 'Approved' | 'Rejected'
+    reviewStatus: string; // 'Requested' | 'Approved' | 'Rejected' | 'Auto-accepted'
   };
   toolCall?: {
     tool: string;    // 'read' | 'edit' | 'terminal' | 'search' | 'web' | 'mcp' | 'other'
@@ -227,6 +227,10 @@ export function listConversations(workspaceHash: string): ConversationSummary[] 
        AND (value LIKE '%"status":"pending"%' OR value LIKE '%"status":"Requested"%')
        LIMIT 5`,
     );
+    // Composer metadata (has AI-generated title)
+    const composerDataStmt = db.prepare(
+      'SELECT value FROM cursorDiskKV WHERE key = ?',
+    );
 
     const conversations: ConversationSummary[] = [];
     for (const c of composers) {
@@ -236,18 +240,28 @@ export function listConversations(workspaceHash: string): ConversationSummary[] 
       const msgCount = countRow?.cnt ?? 0;
       if (msgCount === 0) continue;
 
-      // Find title from first user message
+      // Find title: prefer Cursor's AI-generated name, fall back to first user message
       let title = 'Untitled';
-      const rows = titleStmt.all(prefix, prefixEnd) as { value: string }[];
-      for (const row of rows) {
-        try {
-          const msg = JSON.parse(row.value);
-          if (msg.type === 1 && msg.text && msg.text.length > 0) {
-            title = msg.text.slice(0, 80).replace(/\n/g, ' ').trim();
-            break;
+      try {
+        const cdRow = composerDataStmt.get(`composerData:${c.id}`) as { value: string } | undefined;
+        if (cdRow) {
+          const cd = JSON.parse(cdRow.value);
+          if (cd.name) title = cd.name;
+          else if (cd.subtitle) title = cd.subtitle.slice(0, 80);
+        }
+      } catch { /* fall through */ }
+      if (title === 'Untitled') {
+        const rows = titleStmt.all(prefix, prefixEnd) as { value: string }[];
+        for (const row of rows) {
+          try {
+            const msg = JSON.parse(row.value);
+            if (msg.type === 1 && msg.text && msg.text.length > 0) {
+              title = msg.text.slice(0, 80).replace(/\n/g, ' ').trim();
+              break;
+            }
+          } catch {
+            continue;
           }
-        } catch {
-          continue;
         }
       }
 
@@ -280,10 +294,12 @@ export function listConversations(workspaceHash: string): ConversationSummary[] 
         try {
           const msg = JSON.parse(row.value);
           const tfd = msg.toolFormerData;
-          if (tfd?.name === 'ask_question' && tfd.additionalData?.status === 'pending') {
+          // A tool is resolved if it has a result or a terminal status.
+          const isResolved = !!tfd.result || ['completed', 'error', 'cancelled'].includes(tfd.status);
+          if (tfd?.name === 'ask_question' && tfd.additionalData?.status === 'pending' && !isResolved) {
             hasPendingQuestion = true;
           }
-          if (tfd?.name === 'create_plan' && tfd.additionalData?.reviewData?.status === 'Requested') {
+          if (tfd?.name === 'create_plan' && !isResolved) {
             hasPendingPlanReview = true;
           }
         } catch {
@@ -498,19 +514,19 @@ function parseToolCall(tfd: any): ChatMessage['toolCall'] {
     }
     case 'edit_file_v2':
     case 'search_replace': {
-      const file = params.targetFile || '';
+      const file = params.targetFile || params.relativeWorkspacePath || '';
       return { tool: 'edit', summary: `Edit ${bn(file)}`, detail: file };
     }
     case 'write': {
-      const file = params.targetFile || '';
+      const file = params.targetFile || params.relativeWorkspacePath || '';
       return { tool: 'edit', summary: `Write ${bn(file)}`, detail: file };
     }
     case 'delete_file': {
-      const file = params.targetFile || '';
+      const file = params.targetFile || params.relativeWorkspacePath || '';
       return { tool: 'edit', summary: `Delete ${bn(file)}`, detail: file };
     }
     case 'apply_patch': {
-      const file = params.targetFile || '';
+      const file = params.targetFile || params.relativeWorkspacePath || '';
       return { tool: 'edit', summary: `Patch ${bn(file)}`, detail: file };
     }
     case 'run_terminal_command_v2':
@@ -557,6 +573,22 @@ function parseToolCall(tfd: any): ChatMessage['toolCall'] {
       return { tool: 'other', summary: name };
     }
   }
+}
+
+/** Get conversation title from Cursor's composerData metadata. */
+export function getConversationTitle(conversationId: string): string {
+  const db = openReadonly(GLOBAL_STATE_DB);
+  if (!db) return 'Untitled';
+  try {
+    const row = db.prepare('SELECT value FROM cursorDiskKV WHERE key = ?')
+      .get(`composerData:${conversationId}`) as { value: string } | undefined;
+    if (row) {
+      const cd = JSON.parse(row.value);
+      if (cd.name) return cd.name;
+      if (cd.subtitle) return cd.subtitle.slice(0, 80);
+    }
+  } catch { /* fall through */ } finally { db.close(); }
+  return 'Untitled';
 }
 
 export function getConversation(
@@ -628,6 +660,32 @@ export function getConversation(
           try {
             const params = JSON.parse(tfd.params ?? '{}');
             const ad = tfd.additionalData ?? {};
+            // Derive review status from result + selectedOption + tool status.
+            // Cursor stores {"rejected":{}} even for auto-proceeded plans (selectedOption="none").
+            // Only trust "Rejected" if user explicitly chose reject (selectedOption="reject").
+            let reviewStatus: string = 'unknown';
+            try {
+              const resultObj = tfd.result ? JSON.parse(tfd.result) : null;
+              const option = ad.reviewData?.selectedOption ?? 'none';
+              if (resultObj?.accepted !== undefined) {
+                reviewStatus = (option === 'approve' || ad.reviewData?.status === 'Approved')
+                  ? 'Approved' : 'Auto-accepted';
+              } else if (resultObj?.rejected !== undefined) {
+                // Only "Rejected" if user explicitly rejected; otherwise it was superseded/auto-handled
+                reviewStatus = option === 'reject' ? 'Rejected' : 'Auto-accepted';
+              } else if (tfd.status === 'error') {
+                reviewStatus = 'Error';
+              } else if (tfd.status === 'cancelled') {
+                reviewStatus = 'Cancelled';
+              } else if (tfd.status === 'completed') {
+                reviewStatus = 'Completed';
+              } else {
+                reviewStatus = 'Requested';
+              }
+            } catch {
+              reviewStatus = ad.reviewData?.status ?? 'unknown';
+            }
+
             plan = {
               name: params.name ?? 'Plan',
               overview: params.overview ?? '',
@@ -637,7 +695,7 @@ export function getConversation(
                 content: t.content ?? '',
                 status: t.status ?? 'pending',
               })),
-              reviewStatus: ad.reviewData?.status ?? 'unknown',
+              reviewStatus,
             };
           } catch { /* malformed params */ }
         }
@@ -673,15 +731,19 @@ export function getConversation(
     // Deduplicate context-window replays
     messages = deduplicateMessages(messages);
 
-    // Strip intermediate thinking steps when agent is no longer running.
-    // Thinking steps = very short assistant fragments (<80 chars) that are just
-    // status updates like "Analyzing imports...", "Checking file..." etc.
-    // Keep substantive short messages (progress summaries, conclusions).
-    const last = messages[messages.length - 1];
-    const ageMs = last ? Date.now() - new Date(last.createdAt).getTime() : Infinity;
-    const isRunning = last && last.type === 2 && last.text.length < 300 && ageMs < 2 * 60_000;
-    if (!isRunning) {
-      messages = messages.filter(m => {
+    // Strip intermediate thinking steps (short assistant fragments <80 chars).
+    // These are status updates like "Analyzing imports...", "Checking file..." etc.
+    // Always preserve: the last assistant text message, tool calls, and special types.
+    {
+      let lastAssistantIdx = -1;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].type === 2 && messages[i].text && !messages[i].toolCall) {
+          lastAssistantIdx = i;
+          break;
+        }
+      }
+      messages = messages.filter((m, idx) => {
+        if (idx === lastAssistantIdx) return true;
         if (m.toolCall || m.askQuestion || m.subagentTask || m.plan) return true;
         if (m.type !== 2) return true;
         if (m.text.length >= 80) return true;
