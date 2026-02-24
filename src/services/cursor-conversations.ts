@@ -122,6 +122,8 @@ function getComposerIds(workspaceHash: string): ComposerInfo[] {
     const data = JSON.parse(row.value);
     const composers: ComposerInfo[] = [];
     for (const c of data.allComposers ?? []) {
+      // Skip archived and draft conversations
+      if (c.isArchived || c.isDraft) continue;
       const sub = c.subagentInfo as { parentComposerId?: string; subagentTypeName?: string } | undefined;
       composers.push({
         id: c.composerId,

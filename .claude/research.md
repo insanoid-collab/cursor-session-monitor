@@ -81,9 +81,23 @@ In each workspace's `state.vscdb`, the `ItemTable` key `composer.composerData` c
 {
   "allComposers": [
     {
+      "type": "head",
       "composerId": "uuid",
       "createdAt": 1708900000000,
-      "unifiedMode": "agentic_edit",
+      "unifiedMode": "agent",
+      "forceMode": "edit",
+      "hasUnreadMessages": false,
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0,
+      "hasBlockingPendingActions": false,
+      "isArchived": false,
+      "isDraft": false,
+      "isWorktree": false,
+      "isSpec": false,
+      "isBestOfNSubcomposer": false,
+      "numSubComposers": 0,
+      "referencedPlans": [],
+      "createdOnBranch": "feature/my-branch",
       "subagentInfo": {
         "parentComposerId": "parent-uuid-or-null",
         "subagentTypeName": "researcher"
@@ -92,6 +106,15 @@ In each workspace's `state.vscdb`, the `ItemTable` key `composer.composerData` c
   ]
 }
 ```
+
+Key flags:
+- `isArchived` — user archived this conversation (hidden from Cursor sidebar)
+- `isDraft` — conversation started but never sent (empty prompt)
+- `isWorktree` — associated with a git worktree
+- `isSpec` — spec-type conversation
+- `isBestOfNSubcomposer` — internal sub-agent for best-of-N sampling
+
+We filter out `isArchived` and `isDraft` from the conversation list.
 
 ---
 
