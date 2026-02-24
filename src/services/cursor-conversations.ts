@@ -761,6 +761,22 @@ export function getConversation(
 
     const totalCount = messages.length;
 
+    // Detect agent busy: either a tool has status 'running', or the last message
+    // is a tool call / short thinking step created recently (agent still working).
+    // A finished agent always ends with a substantive assistant response.
+    if (!hasRunningTool && messages.length > 0) {
+      const last = messages[messages.length - 1];
+      const age = Date.now() - new Date(last.createdAt).getTime();
+      if (age < 120_000) { // within 2 minutes
+        if (last.toolCall) {
+          hasRunningTool = true;
+        } else if (last.type === 2 && last.text.length < 80 && !last.plan && !last.askQuestion) {
+          // Short thinking step — agent still generating
+          hasRunningTool = true;
+        }
+      }
+    }
+
     // If "before" cursor provided, slice messages before that timestamp
     if (before) {
       const idx = messages.findIndex((m) => m.createdAt >= before);
