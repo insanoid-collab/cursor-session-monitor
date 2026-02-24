@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import Database from 'better-sqlite3';
 import { logger } from '../utils/logger';
 
@@ -38,6 +39,7 @@ export interface Workspace {
   name: string;
   conversationCount: number;
   isOpen: boolean;
+  branch: string | null;
 }
 
 export interface ConversationSummary {
@@ -89,6 +91,16 @@ export interface ChatMessage {
 function shortName(folder: string): string {
   const parts = folder.replace(/\/$/, '').split('/').filter(Boolean);
   return parts[parts.length - 1] || folder;
+}
+
+function getGitBranch(folder: string): string | null {
+  try {
+    return execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: folder, timeout: 1000, stdio: ['ignore', 'pipe', 'ignore'],
+    }).toString().trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 function openReadonly(dbPath: string): Database.Database | null {
@@ -189,6 +201,7 @@ export function listWorkspaces(onlyOpen = false): Workspace[] {
         name: shortName(folder),
         conversationCount: withMessages,
         isOpen,
+        branch: isOpen ? getGitBranch(folder) : null,
       });
     } catch {
       continue;

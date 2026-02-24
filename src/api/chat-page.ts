@@ -7,7 +7,7 @@ export function chatPageHtml(): string {
 <title>Cursor Conversations</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%231a1a2e'/><path d='M8 10h12l-6 12z' fill='%236c63ff'/><circle cx='22' cy='10' r='3' fill='%2300d68f'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 :root, [data-theme="dark"] {
@@ -64,10 +64,14 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 
 /* Sidebar */
 #sidebar { width: 320px; min-width: 320px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; transition: transform 0.3s ease; }
-#sidebar-header { padding: 16px 20px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 600; color: var(--text-bright); display: flex; align-items: center; gap: 10px; letter-spacing: -0.01em; }
-#sidebar-header .logo { width: 24px; height: 24px; border-radius: 6px; background: var(--accent); display: flex; align-items: center; justify-content: center; }
-#sidebar-header .logo svg { width: 14px; height: 14px; }
-.sidebar-subtitle { font-size: 9px; font-weight: 400; color: var(--text-dim); letter-spacing: 0.02em; margin-top: -1px; }
+#sidebar-header { padding: 14px 20px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--text-bright); display: flex; align-items: center; gap: 10px; letter-spacing: -0.01em; }
+#sidebar-header .logo { width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0; }
+#sidebar-header .logo svg { width: 24px; height: 24px; }
+.sidebar-subtitle { font-size: 9px; font-weight: 400; color: var(--text-dim); letter-spacing: 0.02em; margin-top: -1px; font-family: 'JetBrains Mono', 'SF Mono', monospace; }
+#sidebar-footer { padding: 10px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 14px; }
+#sidebar-footer .toggle-row { font-size: 10px; }
+#sidebar-footer #theme-toggle { cursor: pointer; font-size: 14px; opacity: 0.5; transition: opacity 0.2s; }
+#sidebar-footer #theme-toggle:hover { opacity: 1; }
 #search-box { padding: 12px 16px; border-bottom: 1px solid var(--border); }
 #search-box input { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); padding: 9px 12px; font-size: 12px; font-family: inherit; outline: none; transition: all var(--transition); }
 #search-box input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
@@ -75,13 +79,15 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 #workspace-list { flex: 1; overflow-y: auto; padding: 4px 0; }
 .workspace { margin: 0; }
 .workspace + .workspace { border-top: 1px solid var(--border); }
-.workspace-header { padding: 12px 20px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-dim); user-select: none; transition: all var(--transition); }
+.workspace-header { padding: 10px 20px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); user-select: none; transition: all var(--transition); }
 .workspace-header:hover { background: var(--surface-hover); color: var(--text); }
 .workspace-header .arrow { font-size: 9px; transition: transform var(--transition); opacity: 0.5; }
 .workspace-header.open .arrow { transform: rotate(90deg); opacity: 0.8; }
-.workspace-header .name { flex: 1; overflow: hidden; font-weight: 500; word-break: break-word; transition: color var(--transition); }
-.workspace-header .open-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex-shrink: 0; box-shadow: 0 0 6px rgba(0,214,143,0.4); }
-.workspace-header .count { font-size: 11px; font-weight: 500; color: var(--accent); background: var(--accent-glow); padding: 2px 8px; border-radius: 10px; }
+.workspace-header .ws-info { flex: 1; overflow: hidden; min-width: 0; }
+.workspace-header .name { font-weight: 500; font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color var(--transition); }
+.workspace-header .ws-branch { font-size: 10px; font-family: 'JetBrains Mono', 'SF Mono', monospace; color: var(--text-dim); opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.workspace-header .open-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; box-shadow: 0 0 6px rgba(0,214,143,0.4); }
+.workspace-header .count { font-size: 10px; font-weight: 500; color: var(--accent); background: var(--accent-glow); padding: 1px 7px; border-radius: 10px; flex-shrink: 0; }
 .workspace.is-open > .workspace-header .name { color: var(--text-bright); }
 .conversation-list { display: none; padding-bottom: 4px; }
 .workspace-header.open + .conversation-list { display: block; }
@@ -90,9 +96,9 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .conversation-item { padding: 10px 20px 10px 36px; cursor: pointer; font-size: 12px; border-left: 2px solid transparent; transition: all var(--transition); min-height: 44px; display: flex; flex-direction: column; justify-content: center; }
 .conversation-item:hover { background: var(--surface-hover); }
 .conversation-item.active { background: var(--surface); border-left-color: var(--accent); }
-.conversation-item .conv-title { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 3px; display: flex; align-items: center; gap: 8px; }
+.conversation-item .conv-title { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 3px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
 .conversation-item .conv-title > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.conversation-item .conv-meta { color: var(--text-dim); font-size: 11px; display: flex; gap: 8px; }
+.conversation-item .conv-meta { color: var(--text-dim); font-size: 10px; display: flex; gap: 8px; font-family: 'JetBrains Mono', 'SF Mono', monospace; }
 .activity-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .activity-dot.running { background: var(--green); box-shadow: 0 0 6px rgba(0,214,143,0.5); animation: pulse 2s ease-in-out infinite; }
 .activity-dot.recent { background: var(--green); }
@@ -105,10 +111,10 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .agent-badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; background: var(--green-dim); color: var(--green); }
 .sidebar-spinner { display: inline-block; width: 1em; text-align: center; font-size: 11px; }
 .agent-running-indicator { align-self: flex-start; display: flex; flex-direction: column; gap: 6px; padding: 8px 16px; width: 100%; }
-.agent-running-header { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 13px; font-weight: 500; font-family: 'SF Mono', 'Fira Code', monospace; }
+.agent-running-header { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 13px; font-weight: 500; font-family: 'JetBrains Mono', 'SF Mono', monospace; }
 .braille-spinner { display: inline-block; width: 1.2em; text-align: center; color: var(--green); font-size: 14px; }
 .agent-elapsed { color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.agent-output { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.5; color: var(--text-dim); max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; margin-top: 4px; display: none; }
+.agent-output { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 11px; line-height: 1.5; color: var(--text-dim); max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; margin-top: 4px; display: none; }
 .agent-output:not(:empty) { display: block; }
 .agent-output .line { opacity: 0.7; }
 .agent-output .line:last-child { opacity: 1; color: var(--text); }
@@ -350,15 +356,17 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 <div id="app">
   <div id="sidebar">
     <div id="sidebar-header">
-      <div class="logo"><svg viewBox="0 0 14 14" fill="none"><path d="M3 4h8l-4 8z" fill="white"/></svg></div>
+      <div class="logo"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#1a1a2e"/><path d="M8 10h12l-6 12z" fill="#6c63ff"/><circle cx="22" cy="10" r="3" fill="#00d68f"/></svg></div>
       <div><div>Cursor Chats</div><div class="sidebar-subtitle">from Cursor IDE</div></div>
-      <span id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode" style="cursor:pointer;font-size:16px;margin-left:auto;opacity:0.6;transition:opacity 0.2s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0.6">&#9788;</span>
-      <div class="toggle-row" id="tg-toggle" onclick="toggleTelegram()">
-        <span>TG</span><div class="toggle-switch"></div>
-      </div>
     </div>
     <div id="search-box"><input id="search-input" type="text" placeholder="Search workspaces..." oninput="filterWorkspaces(this.value)"></div>
     <div id="workspace-list"><div class="loading">Loading workspaces...</div></div>
+    <div id="sidebar-footer">
+      <span id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">&#9788;</span>
+      <div class="toggle-row" id="tg-toggle" onclick="toggleTelegram()">
+        <span>Telegram</span><div class="toggle-switch"></div>
+      </div>
+    </div>
   </div>
   <div id="main">
     <div id="main-header"><span id="mobile-back-btn" onclick="showSidebar()">&#8592;</span> Select a conversation</div>
@@ -430,7 +438,10 @@ function renderWorkspaceList(workspaces) {
       '<div class="workspace-header" onclick="toggleWorkspace(this, \\'' + ws.hash + '\\')">' +
         '<span class="arrow">&#9654;</span>' +
         (ws.isOpen ? '<span class="open-dot"></span>' : '') +
-        '<span class="name" title="' + esc(ws.folder) + '">' + esc(ws.name) + '</span>' +
+        '<div class="ws-info">' +
+          '<div class="name" title="' + esc(ws.folder) + '">' + esc(ws.name) + '</div>' +
+          (ws.branch ? '<div class="ws-branch" title="' + esc(ws.branch) + '">&#8627; ' + esc(ws.branch) + '</div>' : '') +
+        '</div>' +
         (ws.conversationCount > 0 ? '<span class="count">' + ws.conversationCount + '</span>' : '') +
       '</div>' +
       '<div class="conversation-list" id="convs-' + ws.hash + '"><div class="loading">Loading...</div></div>' +
