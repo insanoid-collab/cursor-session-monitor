@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createNotifier, OpenClawMessageNotifier, TelegramBotApiNotifier } from '../src/services/notifier/telegram-notifier';
+import { createNotifier, TelegramNotifier } from '../src/services/notifier/telegram-notifier';
 import { AppConfig } from '../src/config';
 
 const baseConfig: AppConfig = {
@@ -7,10 +7,8 @@ const baseConfig: AppConfig = {
   database: { path: './data/sessions.db' },
   telegram: {
     enabled: true,
-    mode: 'openclaw',
-    channel: 'telegram',
-    target: 'telegram:test',
-    account: 'codex',
+    botToken: 'test-token',
+    chatId: 'test-chat',
     notifyOn: { sessionStart: true, sessionEnd: true, fileEdit: true, shellCommand: true, attentionNeeded: true },
     thresholds: {
       fileEditBatchIntervalSeconds: 60,
@@ -19,31 +17,24 @@ const baseConfig: AppConfig = {
       shellMinEvents: 1,
     },
     dangerousCommands: ['sudo'],
+    polling: { enabled: false, intervalMs: 3000 },
   },
   agents: { cursor: { sessionTimeoutMinutes: 120 } },
 };
 
 describe('createNotifier', () => {
-  it('creates openclaw notifier by default', () => {
+  it('creates telegram notifier when configured', () => {
     const notifier = createNotifier(baseConfig);
-    expect(notifier).toBeInstanceOf(OpenClawMessageNotifier);
-  });
-
-  it('falls back to bot api when configured', () => {
-    const notifier = createNotifier({
-      ...baseConfig,
-      telegram: {
-        ...baseConfig.telegram,
-        mode: 'bot_api',
-        botToken: 't',
-        chatId: '1',
-      },
-    });
-    expect(notifier).toBeInstanceOf(TelegramBotApiNotifier);
+    expect(notifier).toBeInstanceOf(TelegramNotifier);
   });
 
   it('returns null when telegram disabled', () => {
     const notifier = createNotifier({ ...baseConfig, telegram: { ...baseConfig.telegram, enabled: false } });
+    expect(notifier).toBeNull();
+  });
+
+  it('returns null when bot token missing', () => {
+    const notifier = createNotifier({ ...baseConfig, telegram: { ...baseConfig.telegram, botToken: undefined } });
     expect(notifier).toBeNull();
   });
 });

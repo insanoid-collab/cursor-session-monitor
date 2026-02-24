@@ -4,13 +4,14 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { registerRoutes } from '../src/api/routes';
 import { SessionManager } from '../src/services/session-manager';
 import { TelegramNotificationService } from '../src/services/telegram-notification-service';
-import { Notifier } from '../src/services/notifier/telegram-notifier';
+import { Notifier, SendResult } from '../src/services/notifier/telegram-notifier';
 import { AppConfig } from '../src/config';
 
 class FakeNotifier implements Notifier {
   public messages: string[] = [];
-  async send(message: string): Promise<void> {
+  async send(message: string): Promise<SendResult> {
     this.messages.push(message);
+    return { messageId: this.messages.length };
   }
 }
 
@@ -27,6 +28,7 @@ function setupDb() {
       working_directory TEXT,
       needs_attention INTEGER DEFAULT 0,
       attention_reason TEXT,
+      last_response_text TEXT,
       metadata TEXT
     );
     CREATE TABLE events (
@@ -63,17 +65,13 @@ const config: AppConfig = {
   database: { path: ':memory:' },
   telegram: {
     enabled: true,
-    mode: 'openclaw',
-    channel: 'telegram',
-    target: 'telegram:test',
-    account: 'codex',
-    botToken: undefined,
-    chatId: undefined,
+    botToken: 'test-token',
+    chatId: 'test-chat',
     notifyOn: {
-      sessionStart: true,
+      sessionStart: false,
       sessionEnd: true,
-      fileEdit: true,
-      shellCommand: true,
+      fileEdit: false,
+      shellCommand: false,
       attentionNeeded: true,
     },
     thresholds: {
@@ -83,6 +81,7 @@ const config: AppConfig = {
       shellMinEvents: 2,
     },
     dangerousCommands: ['rm -rf', 'sudo'],
+    polling: { enabled: false, intervalMs: 3000 },
   },
   agents: { cursor: { sessionTimeoutMinutes: 120 } },
 };
@@ -100,23 +99,23 @@ describe('hooks integration + notifier', () => {
     await registerRoutes(app, manager, notifications);
   });
 
-  it('sends start, danger, batched, and completion notifications', async () => {
+  it('sends danger and completion notifications with project context', async () => {
     await app.inject({
       method: 'POST',
       url: '/hooks/cursor/afterFileEdit',
-      payload: { event: 'afterFileEdit', sessionId: 's1', filePath: 'a.ts', cwd: '/tmp' },
+      payload: { hook_event_name: 'afterFileEdit', conversation_id: 's1', file_path: '/projects/myapp/src/app.ts', workspace_roots: ['/projects/myapp'] },
     });
 
     await app.inject({
       method: 'POST',
       url: '/hooks/cursor/afterFileEdit',
-      payload: { event: 'afterFileEdit', sessionId: 's1', filePath: 'b.ts', cwd: '/tmp' },
+      payload: { hook_event_name: 'afterFileEdit', conversation_id: 's1', file_path: '/projects/myapp/src/utils.ts', workspace_roots: ['/projects/myapp'] },
     });
 
     const shellRes = await app.inject({
       method: 'POST',
       url: '/hooks/cursor/beforeShellExecution',
-      payload: { event: 'beforeShellExecution', sessionId: 's1', command: 'sudo rm -rf /tmp', cwd: '/tmp' },
+      payload: { hook_event_name: 'beforeShellExecution', conversation_id: 's1', command: 'sudo rm -rf /tmp', cwd: '/projects/myapp' },
     });
     expect(shellRes.statusCode).toBe(200);
     expect(shellRes.json().flagged).toBe(true);
@@ -124,14 +123,48 @@ describe('hooks integration + notifier', () => {
     const stopRes = await app.inject({
       method: 'POST',
       url: '/hooks/cursor/stop',
-      payload: { event: 'stop', sessionId: 's1' },
+      payload: { hook_event_name: 'stop', conversation_id: 's1' },
     });
     expect(stopRes.statusCode).toBe(200);
 
-    expect(notifier.messages.some((m) => m.includes('Session Started'))).toBe(true);
-    expect(notifier.messages.some((m) => m.includes('Needs Attention'))).toBe(true);
-    expect(notifier.messages.some((m) => m.includes('Cursor Activity'))).toBe(true);
-    expect(notifier.messages.some((m) => m.includes('Cursor Shell'))).toBe(true);
-    expect(notifier.messages.some((m) => m.includes('Session Complete'))).toBe(true);
+    // Dangerous command notification with project name
+    const dangerMsg = notifier.messages.find((m) => m.includes('Attention Required'));
+    expect(dangerMsg).toBeDefined();
+    expect(dangerMsg).toContain('myapp');
+    expect(dangerMsg).toContain('sudo rm -rf /tmp');
+
+    // Completion notification with project context and file count (no individual files)
+    const completeMsg = notifier.messages.find((m) => m.includes('Session Complete'));
+    expect(completeMsg).toBeDefined();
+    expect(completeMsg).toContain('myapp');
+    expect(completeMsg).toContain('Files: 2');
+    expect(completeMsg).toContain('projects/myapp');
+
+    // No spammy notifications
+    expect(notifier.messages.length).toBe(2);
+  });
+
+  it('includes agent response text in completion notification', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/hooks/cursor/afterFileEdit',
+      payload: { hook_event_name: 'afterFileEdit', conversation_id: 's2', file_path: '/projects/myapp/src/index.ts', workspace_roots: ['/projects/myapp'] },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/hooks/cursor/afterAgentResponse',
+      payload: { hook_event_name: 'afterAgentResponse', conversation_id: 's2', text: 'I have updated the index file with the new route handler.' },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/hooks/cursor/stop',
+      payload: { hook_event_name: 'stop', conversation_id: 's2' },
+    });
+
+    const completeMsg = notifier.messages.find((m) => m.includes('Session Complete'));
+    expect(completeMsg).toBeDefined();
+    expect(completeMsg).toContain('updated the index file');
   });
 });

@@ -8,12 +8,8 @@ database:
 
 telegram:
   enabled: true
-  mode: "openclaw" # openclaw | bot_api
-  channel: "telegram"
-  account: "codex"
-  target: "telegram:155595447"
-  # bot_token: "${TELEGRAM_BOT_TOKEN}"
-  # chat_id: "155595447"
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  chat_id: "${TELEGRAM_CHAT_ID}"
 
   notify_on:
     session_start: true

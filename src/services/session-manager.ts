@@ -89,6 +89,14 @@ export class SessionManager {
       return { flagged, sessionStarted };
     }
 
+    if (event.eventType === 'agent_response') {
+      const text = String(event.metadata.text ?? '');
+      this.db
+        .prepare('UPDATE sessions SET last_response_text = ?, last_activity = ? WHERE session_id = ?')
+        .run(text, event.timestamp, event.sessionId);
+      return { sessionStarted };
+    }
+
     if (event.eventType === 'session_end') {
       this.db
         .prepare(
@@ -191,26 +199,36 @@ export class SessionManager {
   }
 
   getSummary(sessionId: string) {
-    const files = this.db
-      .prepare('SELECT COUNT(*) AS count FROM session_files WHERE session_id = ?')
-      .get(sessionId) as { count: number };
-    const commands = this.db
-      .prepare('SELECT COUNT(*) AS count FROM session_commands WHERE session_id = ?')
-      .get(sessionId) as { count: number };
     const session = this.db
-      .prepare('SELECT started_at, completed_at FROM sessions WHERE session_id = ?')
-      .get(sessionId) as { started_at: string; completed_at: string | null } | undefined;
+      .prepare('SELECT started_at, completed_at, working_directory, last_response_text FROM sessions WHERE session_id = ?')
+      .get(sessionId) as { started_at: string; completed_at: string | null; working_directory: string | null; last_response_text: string | null } | undefined;
 
     if (!session) return null;
 
+    const fileRows = this.db
+      .prepare('SELECT file_path, edit_count FROM session_files WHERE session_id = ? ORDER BY last_edit DESC')
+      .all(sessionId) as { file_path: string; edit_count: number }[];
+
+    const commandCount = (this.db
+      .prepare('SELECT COUNT(*) AS count FROM session_commands WHERE session_id = ?')
+      .get(sessionId) as { count: number }).count;
+
+    const flaggedCommands = this.db
+      .prepare('SELECT command FROM session_commands WHERE session_id = ? AND flagged = 1')
+      .all(sessionId) as { command: string }[];
+
     const start = new Date(session.started_at).getTime();
     const end = new Date(session.completed_at ?? new Date().toISOString()).getTime();
-    const durationMinutes = Math.max(0, Math.round((end - start) / 60000));
+    const durationSeconds = Math.max(0, Math.round((end - start) / 1000));
 
     return {
-      filesModified: files.count,
-      commandsExecuted: commands.count,
-      durationMinutes,
+      workingDirectory: session.working_directory,
+      filesModified: fileRows.length,
+      files: fileRows.map((f) => f.file_path),
+      commandsExecuted: commandCount,
+      flaggedCommands: flaggedCommands.map((c) => c.command),
+      durationSeconds,
+      lastResponseText: session.last_response_text,
     };
   }
 }

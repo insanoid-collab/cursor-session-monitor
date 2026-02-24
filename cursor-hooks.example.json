@@ -3,17 +3,17 @@
   "hooks": {
     "afterFileEdit": [
       {
-        "command": "curl -sS -X POST http://localhost:9876/hooks/cursor/afterFileEdit -H 'Content-Type: application/json' -d @-"
+        "command": "curl -sS -X POST http://cursor-monitor.localhost:1355/hooks/cursor/afterFileEdit -H 'Content-Type: application/json' -d @-"
       }
     ],
     "beforeShellExecution": [
       {
-        "command": "curl -sS -X POST http://localhost:9876/hooks/cursor/beforeShellExecution -H 'Content-Type: application/json' -d @-"
+        "command": "curl -sS -X POST http://cursor-monitor.localhost:1355/hooks/cursor/beforeShellExecution -H 'Content-Type: application/json' -d @-"
       }
     ],
     "stop": [
       {
-        "command": "curl -sS -X POST http://localhost:9876/hooks/cursor/stop -H 'Content-Type: application/json' -d @-"
+        "command": "curl -sS -X POST http://cursor-monitor.localhost:1355/hooks/cursor/stop -H 'Content-Type: application/json' -d @-"
       }
     ]
   }

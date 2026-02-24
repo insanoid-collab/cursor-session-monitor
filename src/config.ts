@@ -7,10 +7,6 @@ export interface AppConfig {
   database: { path: string };
   telegram: {
     enabled: boolean;
-    mode: 'openclaw' | 'bot_api';
-    channel: string;
-    account?: string;
-    target?: string;
     botToken?: string;
     chatId?: string;
     notifyOn: {
@@ -27,6 +23,10 @@ export interface AppConfig {
       shellMinEvents: number;
     };
     dangerousCommands: string[];
+    polling: {
+      enabled: boolean;
+      intervalMs: number;
+    };
   };
   agents: { cursor: { sessionTimeoutMinutes: number } };
 }
@@ -36,8 +36,6 @@ const defaults: AppConfig = {
   database: { path: './data/sessions.db' },
   telegram: {
     enabled: false,
-    mode: 'openclaw',
-    channel: 'telegram',
     notifyOn: {
       sessionStart: true,
       sessionEnd: true,
@@ -52,6 +50,10 @@ const defaults: AppConfig = {
       shellMinEvents: 1,
     },
     dangerousCommands: ['rm -rf', 'sudo', 'curl .*\\|\\s*sh'],
+    polling: {
+      enabled: true,
+      intervalMs: 3000,
+    },
   },
   agents: { cursor: { sessionTimeoutMinutes: 120 } },
 };
@@ -75,10 +77,6 @@ function fromYaml(raw: any): Partial<AppConfig> {
     database: { path: raw?.database?.path },
     telegram: {
       enabled: telegram.enabled,
-      mode: telegram.mode ?? (telegram.use_openclaw ? 'openclaw' : undefined),
-      channel: telegram.channel,
-      account: telegram.account,
-      target: telegram.target ?? telegram.chat_id,
       botToken: telegram.bot_token,
       chatId: telegram.chat_id,
       notifyOn: {
@@ -89,12 +87,16 @@ function fromYaml(raw: any): Partial<AppConfig> {
         attentionNeeded: notifyOn.attention_needed,
       },
       thresholds: {
-        fileEditBatchIntervalSeconds: thresholds.file_edit_batch_interval_seconds ?? telegram.batch_interval_seconds,
+        fileEditBatchIntervalSeconds: thresholds.file_edit_batch_interval_seconds,
         fileEditMinEvents: thresholds.file_edit_min_events,
         shellBatchIntervalSeconds: thresholds.shell_batch_interval_seconds,
         shellMinEvents: thresholds.shell_min_events,
       },
       dangerousCommands: telegram.dangerous_commands,
+      polling: {
+        enabled: telegram.polling?.enabled,
+        intervalMs: telegram.polling?.interval_ms,
+      },
     } as any,
     agents: {
       cursor: { sessionTimeoutMinutes: raw?.agents?.cursor?.session_timeout_minutes },
@@ -139,10 +141,6 @@ export function loadConfig(): AppConfig {
     telegram: {
       ...merged.telegram,
       enabled: envBool(process.env.TELEGRAM_ENABLED, merged.telegram.enabled),
-      mode: (process.env.TELEGRAM_MODE as 'openclaw' | 'bot_api' | undefined) ?? merged.telegram.mode,
-      channel: process.env.TELEGRAM_CHANNEL ?? merged.telegram.channel,
-      account: process.env.TELEGRAM_ACCOUNT ?? merged.telegram.account,
-      target: process.env.TELEGRAM_TARGET ?? merged.telegram.target,
       botToken: process.env.TELEGRAM_BOT_TOKEN ?? merged.telegram.botToken,
       chatId: process.env.TELEGRAM_CHAT_ID ?? merged.telegram.chatId,
     },
