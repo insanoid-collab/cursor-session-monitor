@@ -240,7 +240,7 @@ export function appendToConversation(
     }
 
     // Create user bubble (the Telegram prompt)
-    const userBubble = createBubble(1, `[via Telegram] ${prompt}`);
+    const userBubble = createBubble(1, prompt);
     const userKey = `bubbleId:${conversationId}:${userBubble.bubbleId}`;
 
     // Create assistant bubble (the agent response) — offset timestamp by 1ms

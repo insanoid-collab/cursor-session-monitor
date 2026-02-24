@@ -88,7 +88,7 @@ function formatAnswersForAgent(
     const opt = q.options.find(o => o.id === a.selectedOptionId);
     parts.push(`Q: "${q.prompt}" → "${opt?.label ?? a.selectedOptionId}"`);
   }
-  return `[Answers via Telegram]\n${parts.join('\n')}`;
+  return parts.join('\n');
 }
 
 export class TelegramPollingService {

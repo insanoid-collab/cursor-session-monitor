@@ -67,6 +67,7 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 #sidebar-header { padding: 16px 20px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 600; color: var(--text-bright); display: flex; align-items: center; gap: 10px; letter-spacing: -0.01em; }
 #sidebar-header .logo { width: 24px; height: 24px; border-radius: 6px; background: var(--accent); display: flex; align-items: center; justify-content: center; }
 #sidebar-header .logo svg { width: 14px; height: 14px; }
+.sidebar-subtitle { font-size: 9px; font-weight: 400; color: var(--text-dim); letter-spacing: 0.02em; margin-top: -1px; }
 #search-box { padding: 12px 16px; border-bottom: 1px solid var(--border); }
 #search-box input { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); padding: 9px 12px; font-size: 12px; font-family: inherit; outline: none; transition: all var(--transition); }
 #search-box input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
@@ -350,7 +351,7 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
   <div id="sidebar">
     <div id="sidebar-header">
       <div class="logo"><svg viewBox="0 0 14 14" fill="none"><path d="M3 4h8l-4 8z" fill="white"/></svg></div>
-      Cursor Chats
+      <div><div>Cursor Chats</div><div class="sidebar-subtitle">from Cursor IDE</div></div>
       <span id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode" style="cursor:pointer;font-size:16px;margin-left:auto;opacity:0.6;transition:opacity 0.2s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0.6">&#9788;</span>
       <div class="toggle-row" id="tg-toggle" onclick="toggleTelegram()">
         <span>TG</span><div class="toggle-switch"></div>
