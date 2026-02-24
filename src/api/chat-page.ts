@@ -30,33 +30,33 @@ export function chatPageHtml(): string {
 [data-theme="light"] {
   --bg: #f5f5f7; --bg-elevated: #ffffff; --sidebar-bg: #fafafa;
   --surface: #eeeef0; --surface-hover: #e4e4e8;
-  --border: rgba(0,0,0,0.08); --border-strong: rgba(0,0,0,0.14);
-  --text: #4a4a5a; --text-dim: #8a8a9a; --text-bright: #1a1a2e;
+  --border: rgba(0,0,0,0.10); --border-strong: rgba(0,0,0,0.18);
+  --text: #3a3a4a; --text-dim: #6a6a80; --text-bright: #111122;
   --user-bg: #e8e0ff; --user-bg-hover: #ddd3ff;
-  --assistant-bg: #ffffff; --assistant-border: rgba(0,0,0,0.06);
+  --assistant-bg: #ffffff; --assistant-border: rgba(0,0,0,0.08);
   --accent: #5b52e0; --accent-hover: #4a42cc; --accent-glow: rgba(91,82,224,0.1);
-  --green: #00b377; --green-dim: rgba(0,179,119,0.1);
-  --orange: #e09530; --orange-dim: rgba(224,149,48,0.1);
-  --input-bg: #ffffff; --input-border: rgba(0,0,0,0.12);
-  --shadow: 0 1px 4px rgba(0,0,0,0.06); --shadow-lg: 0 4px 16px rgba(0,0,0,0.1);
-  --code-bg: rgba(91,82,224,0.07); --pre-bg: #f0f0f4;
-  --scrollbar-thumb: rgba(0,0,0,0.1); --scrollbar-hover: rgba(0,0,0,0.2);
+  --green: #00915e; --green-dim: rgba(0,145,94,0.12);
+  --orange: #c07a18; --orange-dim: rgba(192,122,24,0.12);
+  --input-bg: #ffffff; --input-border: rgba(0,0,0,0.15);
+  --shadow: 0 1px 4px rgba(0,0,0,0.08); --shadow-lg: 0 4px 16px rgba(0,0,0,0.12);
+  --code-bg: rgba(91,82,224,0.07); --pre-bg: #ededf2;
+  --scrollbar-thumb: rgba(0,0,0,0.12); --scrollbar-hover: rgba(0,0,0,0.25);
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     --bg: #f5f5f7; --bg-elevated: #ffffff; --sidebar-bg: #fafafa;
     --surface: #eeeef0; --surface-hover: #e4e4e8;
-    --border: rgba(0,0,0,0.08); --border-strong: rgba(0,0,0,0.14);
-    --text: #4a4a5a; --text-dim: #8a8a9a; --text-bright: #1a1a2e;
+    --border: rgba(0,0,0,0.10); --border-strong: rgba(0,0,0,0.18);
+    --text: #3a3a4a; --text-dim: #6a6a80; --text-bright: #111122;
     --user-bg: #e8e0ff; --user-bg-hover: #ddd3ff;
-    --assistant-bg: #ffffff; --assistant-border: rgba(0,0,0,0.06);
+    --assistant-bg: #ffffff; --assistant-border: rgba(0,0,0,0.08);
     --accent: #5b52e0; --accent-hover: #4a42cc; --accent-glow: rgba(91,82,224,0.1);
-    --green: #00b377; --green-dim: rgba(0,179,119,0.1);
-    --orange: #e09530; --orange-dim: rgba(224,149,48,0.1);
-    --input-bg: #ffffff; --input-border: rgba(0,0,0,0.12);
-    --shadow: 0 1px 4px rgba(0,0,0,0.06); --shadow-lg: 0 4px 16px rgba(0,0,0,0.1);
-    --code-bg: rgba(91,82,224,0.07); --pre-bg: #f0f0f4;
-    --scrollbar-thumb: rgba(0,0,0,0.1); --scrollbar-hover: rgba(0,0,0,0.2);
+    --green: #00915e; --green-dim: rgba(0,145,94,0.12);
+    --orange: #c07a18; --orange-dim: rgba(192,122,24,0.12);
+    --input-bg: #ffffff; --input-border: rgba(0,0,0,0.15);
+    --shadow: 0 1px 4px rgba(0,0,0,0.08); --shadow-lg: 0 4px 16px rgba(0,0,0,0.12);
+    --code-bg: rgba(91,82,224,0.07); --pre-bg: #ededf2;
+    --scrollbar-thumb: rgba(0,0,0,0.12); --scrollbar-hover: rgba(0,0,0,0.25);
   }
 }
 html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
@@ -92,7 +92,6 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .repo-group .workspace { border-top: none; }
 .repo-group .workspace + .workspace { border-top: 1px solid var(--border); }
 .workspace-header .open-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; box-shadow: 0 0 6px rgba(0,214,143,0.4); }
-.workspace-header .count { font-size: 10px; font-weight: 500; color: var(--accent); background: var(--accent-glow); padding: 1px 7px; border-radius: 10px; flex-shrink: 0; }
 .workspace.is-open > .workspace-header .name { color: var(--text-bright); }
 .conversation-list { display: none; padding-bottom: 4px; }
 .workspace-header.open + .conversation-list { display: block; }
@@ -101,7 +100,7 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .conversation-item { padding: 10px 20px 10px 36px; cursor: pointer; font-size: 12px; border-left: 2px solid transparent; transition: all var(--transition); min-height: 44px; display: flex; flex-direction: column; justify-content: center; }
 .conversation-item:hover { background: var(--surface-hover); }
 .conversation-item.active { background: var(--surface); border-left-color: var(--accent); }
-.conversation-item .conv-title { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.conversation-item .conv-title { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; font-size: 11px; font-family: 'JetBrains Mono', 'SF Mono', monospace; }
 .conversation-item .conv-title > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conversation-item .conv-meta { color: var(--text-dim); font-size: 10px; display: flex; gap: 8px; font-family: 'JetBrains Mono', 'SF Mono', monospace; }
 .status-badge { font-size: 9px; font-weight: 500; padding: 1px 6px; border-radius: 8px; flex-shrink: 0; white-space: nowrap; margin-left: auto; border: 1px solid; line-height: 1.4; font-family: 'JetBrains Mono', 'SF Mono', monospace; }
@@ -140,7 +139,7 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .agent-tab .tab-badge { font-size: 10px; color: var(--accent); opacity: 0.6; }
 /* Main area */
 #main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
-#main-header { padding: 14px 24px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 500; color: var(--text-dim); display: flex; align-items: center; gap: 10px; min-height: 52px; background: var(--bg-elevated); }
+#main-header { padding: 14px 24px; border-bottom: 1px solid var(--border-strong); font-size: 13px; font-weight: 600; color: var(--text-bright); display: flex; align-items: center; gap: 10px; min-height: 52px; background: var(--surface); box-shadow: 0 1px 4px rgba(0,0,0,0.15); position: relative; z-index: 1; }
 #main-header .conv-mode { font-size: 11px; background: var(--accent-glow); padding: 3px 10px; border-radius: 10px; color: var(--accent); font-weight: 500; }
 .cursor-refresh-btn { background: none; border: 1px solid var(--border-strong); border-radius: var(--radius-xs); padding: 4px 10px; font-size: 11px; color: var(--text-dim); cursor: pointer; margin-left: auto; transition: all var(--transition); font-family: inherit; display: flex; align-items: center; gap: 4px; }
 .cursor-refresh-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
@@ -321,8 +320,10 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 
 /* Loading & buttons */
 .loading { text-align: center; padding: 24px; color: var(--text-dim); font-size: 13px; }
-#show-all-btn { display: block; width: calc(100% - 32px); margin: 8px 16px; padding: 9px; background: transparent; border: 1px dashed var(--border-strong); border-radius: var(--radius-xs); color: var(--text-dim); font-size: 12px; cursor: pointer; text-align: center; transition: all var(--transition); }
-#show-all-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+#show-all-btn { display: none; }
+.footer-btn { background: none; border: 1px solid var(--border); border-radius: var(--radius-xs); padding: 4px 8px; color: var(--text-dim); cursor: pointer; font-size: 13px; transition: all var(--transition); display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; }
+.footer-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+.footer-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
 .load-more-btn { display: block; margin: 0 auto 16px; padding: 8px 20px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-xs); color: var(--text-dim); font-size: 12px; cursor: pointer; transition: all var(--transition); }
 .load-more-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
 
@@ -374,6 +375,7 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
     <div id="workspace-list"><div class="loading">Loading workspaces...</div></div>
     <div id="sidebar-footer">
       <span id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">&#9788;</span>
+      <button class="footer-btn" id="all-ws-toggle" onclick="toggleAllWorkspaces()" title="Show all workspaces"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1.5"/><line x1="2" y1="7" x2="14" y2="7"/><line x1="8" y1="7" x2="8" y2="13"/></svg></button>
       <div class="toggle-row" id="tg-toggle" onclick="toggleTelegram()">
         <span>Telegram</span><div class="toggle-switch"></div>
       </div>
@@ -446,7 +448,6 @@ function renderWorkspaceHtml(ws) {
         '<div class="name" title="' + esc(ws.folder) + '">' + esc(ws.name) + '</div>' +
         (ws.branch ? '<div class="ws-branch" title="' + esc(ws.branch) + '">&#8627; ' + esc(ws.branch) + '</div>' : '') +
       '</div>' +
-      (ws.conversationCount > 0 ? '<span class="count">' + ws.conversationCount + '</span>' : '') +
     '</div>' +
     '<div class="conversation-list" id="convs-' + ws.hash + '"><div class="loading">Loading...</div></div>' +
   '</div>';
@@ -458,11 +459,24 @@ function repoShortName(rootPath) {
   return parts[parts.length - 1] || rootPath;
 }
 
+function updateAllWsToggle() {
+  var btn = document.getElementById('all-ws-toggle');
+  if (btn) {
+    if (showingAll) btn.classList.add('active');
+    else btn.classList.remove('active');
+  }
+}
+
+function toggleAllWorkspaces() {
+  if (showingAll) loadWorkspaces();
+  else loadAllWorkspaces();
+}
+
 function renderWorkspaceList(workspaces) {
   const el = document.getElementById('workspace-list');
+  updateAllWsToggle();
   if (!workspaces || workspaces.length === 0) {
     el.innerHTML = '<div class="loading">' + (showingAll ? 'No workspaces found' : 'No open Cursor windows') + '</div>';
-    if (!showingAll) el.innerHTML += '<button id="show-all-btn" onclick="loadAllWorkspaces()">Show all workspaces</button>';
     return;
   }
   // Group by repo root — workspaces sharing a git repo are grouped together
@@ -490,11 +504,6 @@ function renderWorkspaceList(workspaces) {
       // Single workspace or no repo — render directly
       for (var w2 = 0; w2 < group.items.length; w2++) html += renderWorkspaceHtml(group.items[w2]);
     }
-  }
-  if (showingAll) {
-    html += '<button id="show-all-btn" onclick="loadWorkspaces()">Show only open workspaces</button>';
-  } else {
-    html += '<button id="show-all-btn" onclick="loadAllWorkspaces()">Show all workspaces</button>';
   }
   el.innerHTML = html;
 }
@@ -532,8 +541,6 @@ async function loadWorkspaces() {
 }
 
 async function loadAllWorkspaces() {
-  const btn = document.getElementById('show-all-btn');
-  if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
   try {
     const res = await fetch(API + '/api/workspaces');
     const data = await res.json();
@@ -541,7 +548,7 @@ async function loadAllWorkspaces() {
     showingAll = true;
     renderWorkspaceList(allWorkspaces);
   } catch (e) {
-    if (btn) btn.textContent = 'Failed, try again';
+    // silently fail — toggle stays in old state
   }
 }
 
@@ -846,7 +853,7 @@ function buildActivityHtml(tools, thinks, openByDefault) {
   var parts = [];
   if (counts.read) parts.push('read ' + counts.read);
   if (counts.edit) parts.push('edited ' + counts.edit);
-  if (counts.terminal) parts.push(counts.terminal + ' cmd' + (counts.terminal > 1 ? 's' : ''));
+  if (counts.terminal) parts.push(counts.terminal + ' command' + (counts.terminal > 1 ? 's' : ''));
   if (counts.search) parts.push(counts.search + ' search' + (counts.search > 1 ? 'es' : ''));
   if (counts.web) parts.push(counts.web + ' web');
   if (counts.mcp) parts.push(counts.mcp + ' MCP');
