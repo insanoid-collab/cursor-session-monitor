@@ -40,6 +40,7 @@ export interface Workspace {
   conversationCount: number;
   isOpen: boolean;
   branch: string | null;
+  repoRoot: string | null;
 }
 
 export interface ConversationSummary {
@@ -96,6 +97,16 @@ function shortName(folder: string): string {
 function getGitBranch(folder: string): string | null {
   try {
     return execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: folder, timeout: 1000, stdio: ['ignore', 'pipe', 'ignore'],
+    }).toString().trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function getGitRepoRoot(folder: string): string | null {
+  try {
+    return execSync('git rev-parse --show-toplevel', {
       cwd: folder, timeout: 1000, stdio: ['ignore', 'pipe', 'ignore'],
     }).toString().trim() || null;
   } catch {
@@ -195,6 +206,7 @@ export function listWorkspaces(onlyOpen = false): Workspace[] {
       // Still show open workspaces even with 0 conversations
       if (withMessages === 0 && !isOpen) continue;
 
+      const repoRoot = isOpen ? getGitRepoRoot(folder) : null;
       workspaces.push({
         hash: entry.name,
         folder,
@@ -202,6 +214,7 @@ export function listWorkspaces(onlyOpen = false): Workspace[] {
         conversationCount: withMessages,
         isOpen,
         branch: isOpen ? getGitBranch(folder) : null,
+        repoRoot,
       });
     } catch {
       continue;

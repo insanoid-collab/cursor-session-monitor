@@ -84,8 +84,13 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .workspace-header .arrow { font-size: 9px; transition: transform var(--transition); opacity: 0.5; }
 .workspace-header.open .arrow { transform: rotate(90deg); opacity: 0.8; }
 .workspace-header .ws-info { flex: 1; overflow: hidden; min-width: 0; }
-.workspace-header .name { font-weight: 500; font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color var(--transition); }
-.workspace-header .ws-branch { font-size: 10px; font-family: 'JetBrains Mono', 'SF Mono', monospace; color: var(--text-dim); opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.workspace-header .name { font-weight: 600; font-family: 'JetBrains Mono', 'SF Mono', monospace; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color var(--transition); }
+.workspace-header .ws-branch { font-size: 10px; font-family: 'JetBrains Mono', 'SF Mono', monospace; color: var(--text-dim); opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.repo-group { margin: 0; }
+.repo-group + .repo-group { border-top: 1px solid var(--border); }
+.repo-group-header { padding: 8px 20px 2px; font-size: 10px; font-weight: 600; color: var(--text-dim); font-family: 'JetBrains Mono', 'SF Mono', monospace; letter-spacing: 0.03em; text-transform: uppercase; user-select: none; }
+.repo-group .workspace { border-top: none; }
+.repo-group .workspace + .workspace { border-top: 1px solid var(--border); }
 .workspace-header .open-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; box-shadow: 0 0 6px rgba(0,214,143,0.4); }
 .workspace-header .count { font-size: 10px; font-weight: 500; color: var(--accent); background: var(--accent-glow); padding: 1px 7px; border-radius: 10px; flex-shrink: 0; }
 .workspace.is-open > .workspace-header .name { color: var(--text-bright); }
@@ -96,19 +101,21 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .conversation-item { padding: 10px 20px 10px 36px; cursor: pointer; font-size: 12px; border-left: 2px solid transparent; transition: all var(--transition); min-height: 44px; display: flex; flex-direction: column; justify-content: center; }
 .conversation-item:hover { background: var(--surface-hover); }
 .conversation-item.active { background: var(--surface); border-left-color: var(--accent); }
-.conversation-item .conv-title { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 3px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
-.conversation-item .conv-title > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-item .conv-title { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.conversation-item .conv-title > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conversation-item .conv-meta { color: var(--text-dim); font-size: 10px; display: flex; gap: 8px; font-family: 'JetBrains Mono', 'SF Mono', monospace; }
-.activity-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.activity-dot.running { background: var(--green); box-shadow: 0 0 6px rgba(0,214,143,0.5); animation: pulse 2s ease-in-out infinite; }
-.activity-dot.recent { background: var(--green); }
-.activity-dot.waiting { background: var(--orange); box-shadow: 0 0 4px rgba(255,179,71,0.3); }
-.activity-dot.stale { background: var(--text-dim); opacity: 0.25; }
-@keyframes pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(0,214,143,0.5); } 50% { opacity: 0.4; box-shadow: 0 0 2px rgba(0,214,143,0.2); } }
+.status-badge { font-size: 9px; font-weight: 500; padding: 1px 6px; border-radius: 8px; flex-shrink: 0; white-space: nowrap; margin-left: auto; border: 1px solid; line-height: 1.4; font-family: 'JetBrains Mono', 'SF Mono', monospace; }
+.status-badge.sb-running { color: var(--green); border-color: var(--green); background: var(--green-dim); }
+.status-badge.sb-review { color: var(--orange); border-color: var(--orange); background: var(--orange-dim); animation: pulse 2s ease-in-out infinite; }
+.status-badge.sb-question { color: var(--orange); border-color: var(--orange); background: var(--orange-dim); animation: pulse 2s ease-in-out infinite; }
+.status-badge.sb-idle { color: var(--text-dim); border-color: var(--border-strong); background: transparent; }
+.status-badge.sb-inactive { color: var(--text-dim); border-color: var(--border); background: transparent; opacity: 0.5; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 .subagent-count { font-size: 10px; font-weight: 500; color: var(--accent); background: var(--accent-glow); padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; margin-left: auto; }
 .subagent-badge { font-size: 10px; color: var(--accent); background: var(--accent-glow); padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; }
 .pending-badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; background: var(--orange-dim); color: var(--orange); animation: pulse 2s ease-in-out infinite; }
 .agent-badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 10px; flex-shrink: 0; white-space: nowrap; background: var(--green-dim); color: var(--green); }
+.header-spinner { display: inline-block; width: 1.2em; text-align: center; color: var(--green); font-size: 13px; margin-left: 4px; vertical-align: middle; }
 .sidebar-spinner { display: inline-block; width: 1em; text-align: center; font-size: 11px; }
 .agent-running-indicator { align-self: flex-start; display: flex; flex-direction: column; gap: 6px; padding: 8px 16px; width: 100%; }
 .agent-running-header { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 13px; font-weight: 500; font-family: 'JetBrains Mono', 'SF Mono', monospace; }
@@ -125,7 +132,11 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .agent-tab { padding: 10px 16px; font-size: 12px; color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; display: flex; align-items: center; gap: 8px; transition: all var(--transition); flex-shrink: 0; }
 .agent-tab:hover { color: var(--text); background: var(--surface-hover); }
 .agent-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.agent-tab .tab-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.agent-tab .tab-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; background: var(--text-dim); opacity: 0.4; }
+.agent-tab .tab-dot.running { background: var(--green); opacity: 1; box-shadow: 0 0 4px rgba(0,214,143,0.5); }
+.agent-tab .tab-dot.recent { background: var(--green); opacity: 0.7; }
+.agent-tab .tab-dot.waiting { background: var(--orange); opacity: 0.8; }
+.agent-tab .tab-dot.stale { background: var(--text-dim); opacity: 0.25; }
 .agent-tab .tab-badge { font-size: 10px; color: var(--accent); opacity: 0.6; }
 /* Main area */
 #main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
@@ -277,7 +288,7 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .activity-item.act-think { font-style: italic; color: var(--text-dim); opacity: 0.7; }
 .activity-item.act-think::before { background: var(--text-dim); opacity: 0.3; }
 .activity-summary { font-size: 11px; color: var(--text-dim); opacity: 0.7; margin-left: 2px; }
-.activity-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: 0.4; flex-shrink: 0; }
+.act-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: 0.4; flex-shrink: 0; }
 
 /* Code & markdown */
 .message code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-family: 'SF Mono', 'Fira Code', Menlo, monospace; font-size: 12px; color: var(--text-bright); }
@@ -326,13 +337,13 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 /* Sidebar highlight for updated conversations */
 .conversation-item.updated { border-left-color: var(--green); background: rgba(0,214,143,0.04); }
 .conversation-item.updated .conv-title { color: var(--text-bright); }
-.conversation-item.updated .activity-dot { background: var(--green); box-shadow: 0 0 6px rgba(0,214,143,0.4); }
 
 /* Stale conversations (>12h) — compact single line */
 .conversation-item.stale-conv { min-height: 0; padding: 6px 20px 6px 36px; }
 .conversation-item.stale-conv .conv-title { font-size: 11px; color: var(--text); margin-bottom: 0; }
 .conversation-item.stale-conv .conv-meta { display: none; }
 .conversation-item.stale-conv .stale-time { font-size: 10px; color: var(--text-dim); opacity: 0.6; margin-left: auto; flex-shrink: 0; }
+.conversation-item.stale-conv .status-badge { display: none; }
 .conversation-item.stale-conv .subagent-count { display: none; }
 
 /* Mobile */
@@ -426,6 +437,27 @@ function showMain() {
   document.getElementById('app').classList.add('mobile-chat-open');
 }
 
+function renderWorkspaceHtml(ws) {
+  return '<div class="workspace' + (ws.isOpen ? ' is-open' : '') + '" data-name="' + esc(ws.name).toLowerCase() + '" data-folder="' + esc(ws.folder).toLowerCase() + '">' +
+    '<div class="workspace-header" onclick="toggleWorkspace(this, \\'' + ws.hash + '\\')">' +
+      '<span class="arrow">&#9654;</span>' +
+      (ws.isOpen ? '<span class="open-dot"></span>' : '') +
+      '<div class="ws-info">' +
+        '<div class="name" title="' + esc(ws.folder) + '">' + esc(ws.name) + '</div>' +
+        (ws.branch ? '<div class="ws-branch" title="' + esc(ws.branch) + '">&#8627; ' + esc(ws.branch) + '</div>' : '') +
+      '</div>' +
+      (ws.conversationCount > 0 ? '<span class="count">' + ws.conversationCount + '</span>' : '') +
+    '</div>' +
+    '<div class="conversation-list" id="convs-' + ws.hash + '"><div class="loading">Loading...</div></div>' +
+  '</div>';
+}
+
+function repoShortName(rootPath) {
+  if (!rootPath) return null;
+  var parts = rootPath.replace(/\\/$/, '').split('/').filter(Boolean);
+  return parts[parts.length - 1] || rootPath;
+}
+
 function renderWorkspaceList(workspaces) {
   const el = document.getElementById('workspace-list');
   if (!workspaces || workspaces.length === 0) {
@@ -433,20 +465,32 @@ function renderWorkspaceList(workspaces) {
     if (!showingAll) el.innerHTML += '<button id="show-all-btn" onclick="loadAllWorkspaces()">Show all workspaces</button>';
     return;
   }
-  let html = workspaces.map(ws =>
-    '<div class="workspace' + (ws.isOpen ? ' is-open' : '') + '" data-name="' + esc(ws.name).toLowerCase() + '" data-folder="' + esc(ws.folder).toLowerCase() + '">' +
-      '<div class="workspace-header" onclick="toggleWorkspace(this, \\'' + ws.hash + '\\')">' +
-        '<span class="arrow">&#9654;</span>' +
-        (ws.isOpen ? '<span class="open-dot"></span>' : '') +
-        '<div class="ws-info">' +
-          '<div class="name" title="' + esc(ws.folder) + '">' + esc(ws.name) + '</div>' +
-          (ws.branch ? '<div class="ws-branch" title="' + esc(ws.branch) + '">&#8627; ' + esc(ws.branch) + '</div>' : '') +
-        '</div>' +
-        (ws.conversationCount > 0 ? '<span class="count">' + ws.conversationCount + '</span>' : '') +
-      '</div>' +
-      '<div class="conversation-list" id="convs-' + ws.hash + '"><div class="loading">Loading...</div></div>' +
-    '</div>'
-  ).join('');
+  // Group by repo root — workspaces sharing a git repo are grouped together
+  var groups = [];
+  var groupMap = {};
+  for (var i = 0; i < workspaces.length; i++) {
+    var ws = workspaces[i];
+    var key = ws.repoRoot || ws.folder; // fallback to folder if no repo detected
+    if (!groupMap[key]) {
+      groupMap[key] = { repoRoot: ws.repoRoot, repoName: repoShortName(ws.repoRoot), items: [] };
+      groups.push(groupMap[key]);
+    }
+    groupMap[key].items.push(ws);
+  }
+  var html = '';
+  for (var g = 0; g < groups.length; g++) {
+    var group = groups[g];
+    if (group.repoName && group.items.length > 1) {
+      // Multiple worktrees of same repo — show repo header
+      html += '<div class="repo-group">';
+      html += '<div class="repo-group-header">' + esc(group.repoName) + '</div>';
+      for (var w = 0; w < group.items.length; w++) html += renderWorkspaceHtml(group.items[w]);
+      html += '</div>';
+    } else {
+      // Single workspace or no repo — render directly
+      for (var w2 = 0; w2 < group.items.length; w2++) html += renderWorkspaceHtml(group.items[w2]);
+    }
+  }
   if (showingAll) {
     html += '<button id="show-all-btn" onclick="loadWorkspaces()">Show only open workspaces</button>';
   } else {
@@ -508,20 +552,22 @@ function isStaleConv(c) {
   return (Date.now() - new Date(c.lastMessageAt).getTime()) > 5 * 60 * 60 * 1000;
 }
 
-function pendingBadgeHtml(c) {
-  if (c.pendingAction === 'plan_review') return '<span class="pending-badge">Review</span>';
-  if (c.pendingAction === 'question') return '<span class="pending-badge">Question</span>';
-  return '';
+function convStatusBadge(c) {
+  if (c.agentRunning) return '<span class="status-badge sb-running"><span class="sidebar-spinner"></span> running</span>';
+  if (c.pendingAction === 'plan_review') return '<span class="status-badge sb-review">review</span>';
+  if (c.pendingAction === 'question') return '<span class="status-badge sb-question">question</span>';
+  var status = activityStatus(c.lastMessageAt, c.lastMessageType, c.lastMessageLength);
+  if (status === 'waiting' || status === 'recent') return '<span class="status-badge sb-idle">idle</span>';
+  return '<span class="status-badge sb-inactive">inactive</span>';
 }
 
 function renderConvItem(c, hash) {
   conversationCache[c.id] = c;
-  var status = c.agentRunning ? 'running' : c.pendingAction ? 'waiting' : activityStatus(c.lastMessageAt, c.lastMessageType, c.lastMessageLength);
   var childCount = (c.children && c.children.length) || 0;
   var stale = isStaleConv(c) && !c.pendingAction && !c.agentRunning;
-  var badge = c.agentRunning ? '<span class="agent-badge"><span class="sidebar-spinner"></span> Running</span>' : pendingBadgeHtml(c);
+  var badge = convStatusBadge(c);
   return '<div class="conversation-item' + (stale ? ' stale-conv' : '') + '" data-id="' + c.id + '" onclick="loadConversation(\\'' + c.id + '\\', \\'' + hash + '\\', this)">' +
-    '<div class="conv-title"><span class="activity-dot ' + status + '"></span>' +
+    '<div class="conv-title">' +
     '<span>' + esc(c.title) + '</span>' +
     badge +
     (stale ? '<span class="stale-time">' + timeAgo(c.lastMessageAt || c.createdAt) + '</span>' : '') +
@@ -592,7 +638,7 @@ function agentTabHtml(c, rootId) {
   var label = c.id === rootId ? 'Main agent' : (c.subagentType || 'sub-agent');
   var title = c.title ? c.title.slice(0, 40) : '';
   return '<div class="agent-tab' + (isActive ? ' active' : '') + '" onclick="switchToAgent(\\'' + c.id + '\\')" title="' + esc(title) + '">' +
-    '<span class="tab-dot activity-dot ' + dotClass + '"></span>' +
+    '<span class="tab-dot ' + dotClass + '"></span>' +
     '<span>' + esc(label) + '</span>' +
     (c.id !== rootId && title ? '<span class="tab-badge">' + esc(title.slice(0, 20)) + (title.length > 20 ? '...' : '') + '</span>' : '') +
   '</div>';
@@ -811,7 +857,7 @@ function buildActivityHtml(tools, thinks, openByDefault) {
 
   var html = '<details class="activity-group"' + (openByDefault ? ' open' : '') + '>';
   html += '<summary>';
-  html += '<span class="activity-dot"></span>';
+  html += '<span class="act-dot"></span>';
   html += '<span class="arrow">&#9654;</span> ' + esc(label);
   if (parts.length > 0) {
     html += ' <span class="activity-summary">' + esc(parts.join(', ')) + '</span>';
@@ -1284,7 +1330,7 @@ function updateHeader(title, agentRunning) {
   var h = document.getElementById('main-header');
   h.innerHTML = '<span id="mobile-back-btn" onclick="showSidebar()">&#8592;</span>' +
     esc(title || 'Conversation') +
-    (agentRunning ? ' <span class="agent-badge">Agent running</span>' : '') +
+    (agentRunning ? '<span class="header-spinner" id="header-spinner"></span>' : '') +
     '<button class="cursor-refresh-btn" onclick="refreshCursorWindow(this)" title="Reload Cursor window to sync changes">&#8635; Sync Cursor</button>';
 }
 
@@ -1356,6 +1402,8 @@ function tickSpinner() {
   var ch = brailleFrames[brailleIdx];
   var sp = document.getElementById('braille-spinner');
   if (sp) sp.textContent = ch;
+  var hs = document.getElementById('header-spinner');
+  if (hs) hs.textContent = ch;
   var el = document.getElementById('agent-elapsed');
   if (el && agentStartedAt) {
     el.textContent = formatElapsed(Date.now() - agentStartedAt);
