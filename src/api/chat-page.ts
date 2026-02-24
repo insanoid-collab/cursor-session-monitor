@@ -84,6 +84,8 @@ html, body { height: 100%; font-family: 'Inter', -apple-system, BlinkMacSystemFo
 .workspace.is-open > .workspace-header .name { color: var(--text-bright); }
 .conversation-list { display: none; padding-bottom: 4px; }
 .workspace-header.open + .conversation-list { display: block; }
+.show-more-convs { padding: 6px 20px 6px 36px; font-size: 11px; color: var(--text-dim); cursor: pointer; transition: color var(--transition); }
+.show-more-convs:hover { color: var(--accent); }
 .conversation-item { padding: 10px 20px 10px 36px; cursor: pointer; font-size: 12px; border-left: 2px solid transparent; transition: all var(--transition); min-height: 44px; display: flex; flex-direction: column; justify-content: center; }
 .conversation-item:hover { background: var(--surface-hover); }
 .conversation-item.active { background: var(--surface); border-left-color: var(--accent); }
@@ -518,6 +520,22 @@ function renderConvItem(c, hash) {
     '</div></div>';
 }
 
+function visibleConvCount(conversations) {
+  // 1 most recent always, +1 if < 2hrs, +1 if < 4hrs (max 3)
+  if (conversations.length <= 1) return conversations.length;
+  var now = Date.now();
+  var count = 1; // always show the most recent
+  for (var i = 1; i < conversations.length && count < 3; i++) {
+    var age = now - new Date(conversations[i].lastMessageAt || conversations[i].createdAt).getTime();
+    var hrs = age / 3600000;
+    if ((count === 1 && hrs < 2) || (count === 2 && hrs < 4)) count++;
+    else break;
+  }
+  return count;
+}
+
+var expandedWorkspaces = {};
+
 async function loadConversationsForWorkspace(hash) {
   const el = document.getElementById('convs-' + hash);
   if (!el) return;
@@ -528,10 +546,23 @@ async function loadConversationsForWorkspace(hash) {
       el.innerHTML = '';
       return;
     }
-    el.innerHTML = data.conversations.map(c => renderConvItem(c, hash)).join('');
+    var all = data.conversations;
+    var limit = visibleConvCount(all);
+    var expanded = expandedWorkspaces[hash];
+    var shown = expanded ? all : all.slice(0, limit);
+    var html = shown.map(function(c) { return renderConvItem(c, hash); }).join('');
+    if (!expanded && all.length > limit) {
+      html += '<div class="show-more-convs" onclick="expandWorkspaceConvs(\\'' + hash + '\\')">' + (all.length - limit) + ' more conversations</div>';
+    }
+    el.innerHTML = html;
   } catch (e) {
     el.innerHTML = '<div class="loading" style="padding:8px 32px;font-size:12px">Failed to load</div>';
   }
+}
+
+function expandWorkspaceConvs(hash) {
+  expandedWorkspaces[hash] = true;
+  loadConversationsForWorkspace(hash);
 }
 
 async function toggleWorkspace(header, hash) {
