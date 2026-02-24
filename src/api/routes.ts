@@ -136,8 +136,17 @@ export async function registerRoutes(
     if (!workspace) return { conversations: [] };
     const conversations = listConversations(workspace);
     const agents = getActiveAgents();
+    const now = Date.now();
     for (const c of conversations) {
-      if (agents.has(c.id)) (c as any).agentRunning = true;
+      if (agents.has(c.id)) {
+        (c as any).agentRunning = true;
+      } else if (c.lastMessageAt) {
+        // Heuristic: last message is assistant (type 2), recent, and short = agent still working
+        const age = now - new Date(c.lastMessageAt).getTime();
+        if (age < 120_000 && c.lastMessageType === 2 && c.lastMessageLength < 80) {
+          (c as any).agentRunning = true;
+        }
+      }
     }
     return { conversations };
   });

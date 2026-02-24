@@ -1567,8 +1567,15 @@ async function refreshOpenWorkspaces() {
       var res = await fetch(API + '/api/conversations?workspace=' + hash);
       var data = await res.json();
       if (!data.conversations || data.conversations.length === 0) continue;
-      convList.innerHTML = data.conversations.map(function(c) { return renderConvItem(c, hash); }).join('');
-      // Apply highlights and re-mark active
+      var all = data.conversations;
+      var limit = visibleConvCount(all);
+      var expanded = expandedWorkspaces[hash];
+      var shown = expanded ? all : all.slice(0, limit);
+      var html = shown.map(function(c) { return renderConvItem(c, hash); }).join('');
+      if (!expanded && all.length > limit) {
+        html += '<div class="show-more-convs" onclick="expandWorkspaceConvs(\\'' + hash + '\\')">' + (all.length - limit) + ' more conversations</div>';
+      }
+      convList.innerHTML = html;
       applyHighlights(convList);
       var active = convList.querySelector('[data-id="' + activeConvId + '"]');
       if (active) active.classList.add('active');
